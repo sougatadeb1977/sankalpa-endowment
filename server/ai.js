@@ -575,10 +575,14 @@ async function triageCase(c) {
   if (assets.includes('business_interest') || assets.includes('private_equity')) specialties.add('cpa');
   if (assets.includes('cryptocurrency')) specialties.add('financial_planning');
 
-  const candidate = db.prepare(`SELECT * FROM consultants WHERE is_active=1
+  const pick = db.prepare(`SELECT * FROM consultants WHERE is_active=1
       AND current_case_count < max_concurrent_cases
-      AND (licensed_states LIKE ? OR licensed_states = '[]')
-    ORDER BY current_case_count ASC LIMIT 1`).get(`%"${c.state_of_residence}"%`);
+      AND licensed_states LIKE ?
+    ORDER BY current_case_count ASC LIMIT 1`);
+  const fallback = db.prepare(`SELECT * FROM consultants WHERE is_active=1
+      AND current_case_count < max_concurrent_cases AND licensed_states = '[]'
+    ORDER BY current_case_count ASC LIMIT 1`);
+  const candidate = pick.get(`%"${c.state_of_residence}"%`) || fallback.get() || null;
 
   const sla = { critical: '24 hours', high: '2 business days', medium: '3 business days', standard: '5 business days' }[priority];
   let triage = `${priority.toUpperCase()} priority. ${assets.length} asset type(s) declared` +

@@ -396,23 +396,35 @@ function consultantCoverage() {
       specialties: JSON.parse(c.specialties || '[]'),
       capacity: c.max_concurrent_cases - c.current_case_count,
     }));
+  // A firm with no listed states is a cross-border/referral specialist, not a
+  // firm licensed in all fifty. Counting it as state coverage would overstate
+  // the panel, so it is reported separately.
+  const referralOnly = consultants.filter((c) => c.licensed_states.length === 0);
+  const stateLicensed = consultants.filter((c) => c.licensed_states.length > 0);
+
   const coverage = PRIORITY_STATES.map((st) => {
-    const firms = consultants.filter((c) => c.licensed_states.includes(st) || c.licensed_states.length === 0);
+    const firms = stateLicensed.filter((c) => c.licensed_states.includes(st));
     return {
       state: st,
       firms: firms.length,
       capacity: firms.reduce((s, c) => s + Math.max(0, c.capacity), 0),
       specialties: [...new Set(firms.flatMap((c) => c.specialties))],
       covered: firms.length > 0,
+      redundant: firms.length > 1, // no single point of failure in this state
       names: firms.map((c) => `${c.first_name} ${c.last_name}${c.firm_name ? ` — ${c.firm_name}` : ''}`),
     };
   });
+
   return {
     priorityStates: PRIORITY_STATES,
     coverage,
     statesCovered: coverage.filter((c) => c.covered).length,
+    statesWithRedundancy: coverage.filter((c) => c.redundant).length,
     totalStates: PRIORITY_STATES.length,
     consultants: consultants.map(({ password_hash, ...c }) => c),
+    referralSpecialists: referralOnly.map((c) => ({
+      name: `${c.first_name} ${c.last_name}`, firm: c.firm_name, specialties: c.specialties,
+    })),
     model: 'Donor-engaged and donor-paid. The consultant contracts directly with the donor, so the Foundation never pays for advice given to its own donors and no conflict of interest arises. The Foundation is notified only of the final documentation and allocation.',
   };
 }

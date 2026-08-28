@@ -265,8 +265,8 @@ export default function Counsel() {
               <div className="grid g4" style={{ marginBottom: 30 }}>
                 {[
                   ['Priority states covered', `${network.statesCovered} of ${network.totalStates}`],
+                  ['States with more than one firm', `${network.statesWithRedundancy} of ${network.totalStates}`],
                   ['Firms on the panel', num(network.consultants.length)],
-                  ['Open case capacity', num(network.coverage.reduce((s, c) => s + c.capacity, 0))],
                   ['Cost to the Foundation', '$0'],
                 ].map(([l, v]) => (
                   <div className="kpi" key={l}><div className="kpi-lab">{l}</div>
@@ -284,7 +284,11 @@ export default function Counsel() {
                       {network.coverage.map((c) => (
                         <tr key={c.state}>
                           <td style={{ fontWeight: 600 }}>{STATE_NAMES[c.state] || c.state}</td>
-                          <td className="r">{c.firms}</td>
+                          <td className="r">{c.firms}
+                            {!c.redundant && c.firms > 0 && (
+                              <span className="badge b-pending" style={{ marginLeft: 8 }}>single</span>
+                            )}
+                          </td>
                           <td className="r">{c.capacity} open cases</td>
                           <td className="small muted">{c.specialties.map(titleize).join(', ')}</td>
                         </tr>
