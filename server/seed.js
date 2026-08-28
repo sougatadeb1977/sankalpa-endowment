@@ -26,6 +26,21 @@ function seed() {
   if (existing > 0 && process.env.SANKALPA_RESEED !== '1') {
     return { skipped: true, donors: existing };
   }
+  // Building the database posts thousands of journal entries, each of which is
+  // its own transaction. At synchronous=NORMAL that is thousands of fsyncs and
+  // the build takes minutes - long enough to look like a failed boot. Nothing
+  // here needs crash durability, because a half-built demo database is thrown
+  // away and rebuilt, so drop synchronous for the build and restore it after.
+  db.pragma('synchronous = OFF');
+  try {
+    return buildSeed();
+  } finally {
+    db.pragma('synchronous = NORMAL');
+    db.pragma('wal_checkpoint(TRUNCATE)');
+  }
+}
+
+function buildSeed() {
   if (process.env.SANKALPA_RESEED === '1') {
     // Foreign keys are enforced in normal operation, so a straight table-by-table
     // teardown would abort on the first parent row that still has children. Drop
@@ -249,7 +264,7 @@ function seed() {
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
 
   const donors = [];
-  const N_DONORS = 168;
+  const N_DONORS = 420;
   const cum = [];
   let acc = 0;
   for (const g of GEO) { acc += g[4]; cum.push([acc, g]); }
@@ -307,13 +322,13 @@ function seed() {
 
   let txCount = 0;
   const donorTotals = new Map();
-  const START = new Date('2022-09-01').getTime();
+  const START = new Date('2021-01-04').getTime();   // six fiscal years of history
   const SPAN = Date.now() - START;
 
   for (const d of donors) {
-    const isMajor = rnd() < 0.14;
+    const isMajor = rnd() < 0.085;
     const isRecurring = rnd() < 0.28;
-    const n = isRecurring ? iint(8, 40) : isMajor ? iint(2, 8) : iint(1, 6);
+    const n = isRecurring ? iint(8, 46) : isMajor ? iint(2, 8) : iint(1, 5);
     const firstGift = START + rnd() * SPAN * 0.7;
     for (let k = 0; k < n; k++) {
       const when = isRecurring
@@ -321,7 +336,7 @@ function seed() {
         : new Date(firstGift + rnd() * (Date.now() - firstGift));
       if (when.getTime() > Date.now()) continue;
       let amount;
-      if (isMajor) amount = Math.round(between(2500, 175000) / 500) * 500;
+      if (isMajor) amount = Math.round(between(2500, 60000) / 500) * 500;
       else if (isRecurring) amount = pick([25, 50, 75, 100, 108, 150, 250, 500]);
       else amount = pick([25, 50, 100, 108, 250, 500, 1000, 1500, 2500, 5000]);
 
@@ -405,7 +420,7 @@ function seed() {
   const candidates = donors
     .filter((d) => d.age >= 50)
     .sort((a, b) => (donorTotals.get(b.id) || 0) - (donorTotals.get(a.id) || 0));
-  const plannedDonors = candidates.slice(0, 74);
+  const plannedDonors = candidates.slice(0, 105);
 
   for (const d of plannedDonors) {
     const type = pick(GIFT_TYPES);
@@ -543,6 +558,217 @@ function seed() {
   }
 
   actuarial.recalculateAllNpv();
+
+  // ══════════════════ operating ledger ══════════════════
+  // A fund accounting system that only ever records contributions is not a
+  // fund accounting system. These are the entries every nonprofit actually
+  // posts: payroll and programme costs, investment income, realised gains,
+  // the endowment spending distribution, depreciation, and multi-year pledges
+  // recognised as receivables. They give the statement of activities a real
+  // functional-expense split and make year-on-year comparison meaningful.
+  const A = (code) => acct[code];
+  const monthsBetween = (from, to) => {
+    const out = [];
+    const d = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 1));
+    while (d <= to) {
+      out.push(new Date(d));
+      d.setUTCMonth(d.getUTCMonth() + 1);
+    }
+    return out;
+  };
+  const months = monthsBetween(new Date(START), new Date());
+  const endOfMonth = (d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+
+  // Contributions actually received each month drive the operating budget.
+  const monthlyIncome = db.prepare(`SELECT substr(transaction_date,1,7) m, SUM(amount) v
+    FROM transactions WHERE status='completed' GROUP BY m`).all()
+    .reduce((acc, r) => { acc[r.m] = r.v; return acc; }, {});
+
+  const opFund = fundBy['GEN-MOST'];
+  const endFund = fundBy['END-GEN'];
+  let opEntries = 0;
+
+  months.forEach((m, idx) => {
+    const key = m.toISOString().slice(0, 7);
+    const income = monthlyIncome[key] || 0;
+    if (income <= 0) return;
+    const eom = endOfMonth(m);
+    if (eom > new Date()) return;
+
+    // Spend roughly 62-72% of what came in, split on nonprofit functional lines.
+    const spend = income * between(0.62, 0.72);
+    const program = round2(spend * between(0.74, 0.80));
+    const admin = round2(spend * between(0.09, 0.12));
+    const fundraising = round2(spend - program - admin);
+    if (program <= 0 || admin <= 0 || fundraising <= 0) return;
+
+    postJournalEntry({
+      entry_date: dateStr(eom),
+      description: `Monthly operating expenses - ${key}`,
+      reference_number: `OPEX-${key}`,
+      entry_type: 'automated', status: 'posted',
+      posted_by: financeDir.id, created_by: financeDir.id,
+    }, [
+      { account_id: A('5000'), fund_id: opFund.id, debit_amount: program, description: 'Programme services' },
+      { account_id: A('5100'), fund_id: opFund.id, debit_amount: admin, description: 'Management and general' },
+      { account_id: A('5200'), fund_id: opFund.id, debit_amount: fundraising, description: 'Fundraising' },
+      { account_id: A('1000'), fund_id: opFund.id, credit_amount: round2(program + admin + fundraising), description: 'Cash disbursed' },
+    ]);
+    opEntries++;
+
+    // Quarter-end: sweep new endowment gifts into the investment pool, then
+    // record income, market movement and the spending distribution.
+    if ((m.getUTCMonth() + 1) % 3 === 0) {
+      const qStart = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() - 2, 1));
+      const newCorpus = db.prepare(`SELECT COALESCE(SUM(t.amount),0) v FROM transactions t
+        JOIN funds f ON f.id=t.fund_id
+        WHERE f.is_endowment=1 AND t.status='completed'
+          AND t.transaction_date >= ? AND t.transaction_date <= ?`)
+        .get(dateStr(qStart), dateStr(eom)).v;
+      if (newCorpus > 0) {
+        postJournalEntry({
+          entry_date: dateStr(eom),
+          description: `Endowment gifts swept to the investment pool - ${key}`,
+          reference_number: `SWEEP-${key}`, entry_type: 'automated', status: 'posted',
+          posted_by: financeDir.id, created_by: financeDir.id,
+        }, [
+          { account_id: A('1300'), fund_id: endFund.id, debit_amount: round2(newCorpus), description: 'Invested per the investment policy' },
+          { account_id: A('1000'), fund_id: endFund.id, credit_amount: round2(newCorpus), description: 'Cash transferred to investments' },
+        ]);
+        opEntries++;
+      }
+
+      const corpusToDate = db.prepare(`SELECT COALESCE(SUM(t.amount),0) v FROM transactions t
+        JOIN funds f ON f.id=t.fund_id
+        WHERE f.is_endowment=1 AND t.status='completed' AND t.transaction_date <= ?`).get(dateStr(eom)).v;
+      if (corpusToDate > 50000) {
+        const income4 = round2(corpusToDate * between(0.0045, 0.0075));
+        const gain = round2(corpusToDate * between(-0.012, 0.032));
+        const distribution = round2(corpusToDate * 0.045 / 4);
+
+        postJournalEntry({
+          entry_date: dateStr(eom),
+          description: `Endowment investment income - ${key}`,
+          reference_number: `INV-${key}`, entry_type: 'automated', status: 'posted',
+          posted_by: financeDir.id, created_by: financeDir.id,
+        }, [
+          { account_id: A('1300'), fund_id: endFund.id, debit_amount: income4, description: 'Interest and dividends reinvested' },
+          { account_id: A('4400'), fund_id: endFund.id, credit_amount: income4, description: 'Investment income - restricted' },
+        ]);
+        opEntries++;
+
+        if (gain > 0) {
+          postJournalEntry({
+            entry_date: dateStr(eom),
+            description: `Unrealised market appreciation - ${key}`,
+            reference_number: `MKT-${key}`, entry_type: 'automated', status: 'posted',
+            posted_by: financeDir.id, created_by: financeDir.id,
+          }, [
+            { account_id: A('1300'), fund_id: endFund.id, debit_amount: gain, description: 'Change in fair value' },
+            { account_id: A('4500'), fund_id: endFund.id, credit_amount: gain, description: 'Realised and unrealised gains' },
+          ]);
+          opEntries++;
+        } else if (gain < 0) {
+          postJournalEntry({
+            entry_date: dateStr(eom),
+            description: `Unrealised market depreciation - ${key}`,
+            reference_number: `MKT-${key}`, entry_type: 'automated', status: 'posted',
+            posted_by: financeDir.id, created_by: financeDir.id,
+          }, [
+            { account_id: A('4500'), fund_id: endFund.id, debit_amount: round2(-gain), description: 'Realised and unrealised losses' },
+            { account_id: A('1300'), fund_id: endFund.id, credit_amount: round2(-gain), description: 'Change in fair value' },
+          ]);
+          opEntries++;
+        }
+
+        // UPMIFA spending policy: 4.5% a year, drawn quarterly into cash.
+        postJournalEntry({
+          entry_date: dateStr(eom),
+          description: `Endowment spending distribution (4.5% policy) - ${key}`,
+          reference_number: `DIST-${key}`, entry_type: 'automated', status: 'posted',
+          posted_by: financeDir.id, created_by: financeDir.id,
+        }, [
+          { account_id: A('1000'), fund_id: opFund.id, debit_amount: distribution, description: 'Distribution to operations' },
+          { account_id: A('1300'), fund_id: endFund.id, credit_amount: distribution, description: 'Drawn from endowment investments' },
+        ]);
+        opEntries++;
+      }
+    }
+
+    // Year-end: depreciation on the fixed asset register.
+    if (m.getUTCMonth() === 11) {
+      const dep = db.prepare("SELECT COALESCE(SUM((acquisition_cost - salvage_value)/useful_life_years),0) v FROM fixed_assets WHERE acquisition_date <= ?").get(dateStr(eom)).v;
+      if (dep > 0) {
+        postJournalEntry({
+          entry_date: dateStr(eom),
+          description: `Annual depreciation - ${m.getUTCFullYear()}`,
+          reference_number: `DEP-${m.getUTCFullYear()}`, entry_type: 'automated', status: 'posted',
+          posted_by: financeDir.id, created_by: financeDir.id,
+        }, [
+          { account_id: A('5300'), fund_id: opFund.id, debit_amount: round2(dep), description: 'Depreciation expense' },
+          { account_id: A('1400'), fund_id: opFund.id, credit_amount: round2(dep), description: 'Accumulated depreciation' },
+        ]);
+        opEntries++;
+      }
+    }
+  });
+
+  // Multi-year pledges recognised as receivables, then collected in instalments.
+  const pledgeDonors = donors.filter((_, i) => i % 17 === 0).slice(0, 24);
+  for (const d of pledgeDonors) {
+    const total = Math.round(between(25000, 250000) / 5000) * 5000;
+    const years = iint(3, 5);
+    const perYear = round2(total / years);
+    const start = new Date(START + rnd() * (Date.now() - START) * 0.4);
+    const plId = uuid();
+    plIns.run(plId, d.id, 'multi_year_installment', 'active', total, endFund.id, 'endowment',
+      dateStr(start), null, `${years}-year pledge, ${'$'}${perYear.toLocaleString('en-US')} annually.`,
+      devOfficer.id, start.toISOString());
+
+    postJournalEntry({
+      entry_date: dateStr(start),
+      description: `Unconditional pledge recognised - ${d.first} ${d.last}`,
+      reference_number: `PLG-${plId.slice(0, 8).toUpperCase()}`,
+      entry_type: 'automated', status: 'posted',
+      posted_by: financeDir.id, created_by: financeDir.id,
+    }, [
+      { account_id: A('1200'), fund_id: endFund.id, debit_amount: total, donor_id: d.id, description: 'Pledges receivable' },
+      { account_id: A('4200'), fund_id: endFund.id, credit_amount: total, donor_id: d.id, description: 'Contribution - endowment' },
+    ]);
+    opEntries++;
+
+    for (let y = 0; y < years; y++) {
+      const due = new Date(start.getTime() + y * 365.25 * 86400000);
+      if (due > new Date()) break;
+      postJournalEntry({
+        entry_date: dateStr(due),
+        description: `Pledge instalment received - ${d.first} ${d.last}`,
+        reference_number: `PLGP-${plId.slice(0, 8).toUpperCase()}-${y + 1}`,
+        entry_type: 'automated', status: 'posted',
+        posted_by: financeDir.id, created_by: financeDir.id,
+      }, [
+        { account_id: A('1000'), fund_id: endFund.id, debit_amount: perYear, donor_id: d.id, description: 'Cash received on pledge' },
+        { account_id: A('1200'), fund_id: endFund.id, credit_amount: perYear, donor_id: d.id, description: 'Pledges receivable settled' },
+      ]);
+      opEntries++;
+    }
+  }
+
+  // Allowance for uncollectible pledges - 4% of the outstanding receivable.
+  const outstanding = db.prepare(`SELECT COALESCE(SUM(l.debit_amount) - SUM(l.credit_amount),0) v
+    FROM journal_lines l JOIN accounts a ON a.id=l.account_id WHERE a.account_code='1200'`).get().v;
+  if (outstanding > 0) {
+    postJournalEntry({
+      entry_date: dateStr(new Date()),
+      description: 'Allowance for uncollectible pledges (4%)',
+      reference_number: 'ALLOW-CURRENT', entry_type: 'automated', status: 'posted',
+      posted_by: financeDir.id, created_by: financeDir.id,
+    }, [
+      { account_id: A('5100'), fund_id: endFund.id, debit_amount: round2(outstanding * 0.04), description: 'Provision for uncollectible pledges' },
+      { account_id: A('1201'), fund_id: endFund.id, credit_amount: round2(outstanding * 0.04), description: 'Allowance for uncollectible pledges' },
+    ]);
+    opEntries++;
+  }
 
   // ─────────────────── investments & endowment history ────────────────
   const INV = [
@@ -741,6 +967,8 @@ function seed() {
     skipped: false,
     donors: donors.length, transactions: txCount,
     consultants: CONSULTANTS.length,
+    operatingEntries: opEntries,
+    fiscalYears: db.prepare("SELECT COUNT(DISTINCT substr(entry_date,1,4)) n FROM journal_entries").get().n,
     interactions: db.prepare('SELECT COUNT(*) n FROM interactions').get().n,
     premiums: db.prepare('SELECT COUNT(*) n FROM policy_premiums').get().n,
     plannedGifts: plannedDonors.length,

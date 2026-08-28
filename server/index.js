@@ -15,6 +15,7 @@ const actuarial = require('./actuarial');
 const ai = require('./ai');
 const partners = require('./partners');
 const stewardship = require('./stewardship');
+const datahub = require('./datahub');
 const { seed } = require('./seed');
 
 const app = express();
@@ -482,13 +483,21 @@ app.post('/api/auth/staff-mfa', (req, res) => {
 });
 
 app.get('/api/portal/dashboard', requireRole('*'), (req, res) => {
+  const fy = /^\d{4}$/.test(String(req.query.year || '')) ? String(req.query.year) : null;
   const cash = one("SELECT COALESCE(SUM(amount),0) v, COUNT(*) n FROM transactions WHERE status='completed'");
   const forecast = actuarial.portfolioForecast();
   const ytd = one(`SELECT COALESCE(SUM(amount),0) v FROM transactions
-    WHERE status='completed' AND substr(transaction_date,1,4) = ?`, String(new Date().getFullYear()));
+    WHERE status='completed' AND substr(transaction_date,1,4) = ?`,
+  fy || String(new Date().getFullYear()));
+  const periodGifts = one(`SELECT COALESCE(SUM(amount),0) v, COUNT(*) n, COUNT(DISTINCT donor_id) d
+    FROM transactions WHERE status='completed'` + (fy ? ' AND substr(transaction_date,1,4) = ?' : ''),
+  ...(fy ? [fy] : []));
   res.json({
     goal: GOAL, cashRaised: r2(cash.v), transactionCount: cash.n,
     ytdRaised: r2(ytd.v),
+    period: fy || 'Inception to date',
+    availableYears: datahub.fiscalYears().map((y) => y.year),
+    periodCash: r2(periodGifts.v), periodGifts: periodGifts.n, periodDonors: periodGifts.d,
     pipeline: forecast.totals, horizons: forecast.horizons, byType: forecast.byType,
     discountRate: forecast.discountRate,
     percentComplete: r2(((cash.v + forecast.totals.base) / GOAL) * 100),
@@ -520,43 +529,90 @@ app.get('/api/portal/accounts', requireRole('*'), (req, res) => {
 });
 
 app.get('/api/portal/trial-balance', requireRole('*'), (req, res) => {
-  const rows = all(`SELECT a.account_code,a.account_name,a.account_type,a.normal_balance,a.net_asset_class,
-      COALESCE(SUM(l.debit_amount),0) debits, COALESCE(SUM(l.credit_amount),0) credits
+  // A trial balance is only meaningful for a stated period. `year` restricts to
+  // one fiscal year; omitting it gives inception-to-date.
+  const year = /^\d{4}$/.test(String(req.query.year || '')) ? String(req.query.year) : null;
+  // The period filter has to exclude the LINE, not merely null the joined
+  // entry - a LEFT JOIN whose condition fails still leaves the line in the
+  // sum, which silently returned inception-to-date for every year.
+  const yearFilter = year ? 'AND substr(e.entry_date,1,4) = @year' : '';
+  const rows = db.prepare(`SELECT a.account_code,a.account_name,a.account_type,a.normal_balance,a.net_asset_class,
+      COALESCE(SUM(p.debit_amount),0) debits, COALESCE(SUM(p.credit_amount),0) credits
     FROM accounts a
-    LEFT JOIN journal_lines l ON l.account_id=a.id
-    LEFT JOIN journal_entries e ON e.id=l.journal_entry_id AND e.status='posted'
-    GROUP BY a.id ORDER BY a.account_code`);
+    LEFT JOIN (
+      SELECT l.account_id, l.debit_amount, l.credit_amount
+      FROM journal_lines l
+      JOIN journal_entries e ON e.id = l.journal_entry_id AND e.status = 'posted'
+      WHERE 1=1 ${yearFilter}
+    ) p ON p.account_id = a.id
+    GROUP BY a.id ORDER BY a.account_code`).all(year ? { year } : {});
   const out = rows.map((r) => {
     const net = r.normal_balance === 'debit' ? r.debits - r.credits : r.credits - r.debits;
     return { ...r, debits: r2(r.debits), credits: r2(r.credits), balance: r2(net) };
   }).filter((r) => Math.abs(r.debits) > 0.004 || Math.abs(r.credits) > 0.004);
   const totalDebits = r2(out.reduce((s, r) => s + r.debits, 0));
   const totalCredits = r2(out.reduce((s, r) => s + r.credits, 0));
-  res.json({ rows: out, totalDebits, totalCredits, balanced: Math.abs(totalDebits - totalCredits) < 0.05 });
+  res.json({
+    rows: out, totalDebits, totalCredits,
+    balanced: Math.abs(totalDebits - totalCredits) < 0.05,
+    period: year || 'Inception to date',
+    availableYears: datahub.fiscalYears().map((y) => y.year),
+  });
 });
 
 /** Statement of Activities and Financial Position per FASB ASC 958. */
 app.get('/api/portal/statements', requireRole('*'), (req, res) => {
-  const byClass = all(`SELECT a.net_asset_class nac, a.account_type type, a.account_code code,
-      a.account_name name, COALESCE(SUM(l.credit_amount)-SUM(l.debit_amount),0) net
-    FROM accounts a LEFT JOIN journal_lines l ON l.account_id=a.id
-    LEFT JOIN journal_entries e ON e.id=l.journal_entry_id AND e.status='posted'
-    GROUP BY a.id HAVING net != 0 ORDER BY a.account_code`);
+  const year = /^\d{4}$/.test(String(req.query.year || '')) ? String(req.query.year) : null;
+  const prior = year ? String(Number(year) - 1) : null;
+  const activityFor = (y) => {
+    const clause = y ? 'AND substr(e.entry_date,1,4) = @y' : '';
+    return db.prepare(`SELECT a.net_asset_class nac, a.account_type type, a.account_code code,
+        a.account_name name, COALESCE(SUM(p.credit_amount)-SUM(p.debit_amount),0) net
+      FROM accounts a
+      LEFT JOIN (
+        SELECT l.account_id, l.debit_amount, l.credit_amount
+        FROM journal_lines l
+        JOIN journal_entries e ON e.id = l.journal_entry_id AND e.status = 'posted'
+        WHERE 1=1 ${clause}
+      ) p ON p.account_id = a.id
+      GROUP BY a.id HAVING net != 0 ORDER BY a.account_code`).all(y ? { y } : {});
+  };
+  const byClass = activityFor(year);
   const revenue = byClass.filter((r) => r.type === 'revenue');
   const expense = byClass.filter((r) => r.type === 'expense').map((r) => ({ ...r, net: -r.net }));
-  const assets = all(`SELECT a.account_code code,a.account_name name,
-      COALESCE(SUM(l.debit_amount)-SUM(l.credit_amount),0) net
-    FROM accounts a LEFT JOIN journal_lines l ON l.account_id=a.id
-    LEFT JOIN journal_entries e ON e.id=l.journal_entry_id AND e.status='posted'
-    WHERE a.account_type='asset' GROUP BY a.id HAVING net != 0`);
+  // A balance sheet is cumulative: everything up to and including the period.
+  const asOf = year ? 'AND substr(e.entry_date,1,4) <= @y' : '';
+  const assets = db.prepare(`SELECT a.account_code code,a.account_name name,
+      COALESCE(SUM(p.debit_amount)-SUM(p.credit_amount),0) net
+    FROM accounts a
+    LEFT JOIN (
+      SELECT l.account_id, l.debit_amount, l.credit_amount
+      FROM journal_lines l
+      JOIN journal_entries e ON e.id = l.journal_entry_id AND e.status = 'posted'
+      WHERE 1=1 ${asOf}
+    ) p ON p.account_id = a.id
+    WHERE a.account_type='asset' GROUP BY a.id HAVING net != 0`).all(year ? { y: year } : {});
   const totalRevenue = r2(revenue.reduce((s, r) => s + r.net, 0));
   const totalExpense = r2(expense.reduce((s, r) => s + r.net, 0));
   const pipeline = actuarial.portfolioForecast().totals;
+
+  // Prior-year comparative, so every figure can be read year on year.
+  const priorRows = prior ? activityFor(prior) : [];
+  const priorRevenue = r2(priorRows.filter((r) => r.type === 'revenue').reduce((s, r) => s + r.net, 0));
+  const priorExpense = r2(priorRows.filter((r) => r.type === 'expense').reduce((s, r) => s + (-r.net), 0));
+  const delta = (cur, pri) => (pri ? r2(((cur - pri) / Math.abs(pri)) * 100) : null);
   res.json({
     statementOfActivities: {
       revenue: revenue.map((r) => ({ ...r, net: r2(r.net) })),
       expense: expense.map((r) => ({ ...r, net: r2(r.net) })),
       totalRevenue, totalExpense, changeInNetAssets: r2(totalRevenue - totalExpense),
+      priorYear: prior,
+      priorTotalRevenue: priorRevenue, priorTotalExpense: priorExpense,
+      revenueChangePct: delta(totalRevenue, priorRevenue),
+      expenseChangePct: delta(totalExpense, priorExpense),
+      programExpenseRatio: totalExpense > 0
+        ? r2((expense.filter((e2) => e2.code === '5000').reduce((s, e2) => s + e2.net, 0) / totalExpense) * 100)
+        : null,
       withoutRestriction: r2(revenue.filter((r) => r.nac === 'without_restriction').reduce((s, r) => s + r.net, 0)),
       purposeRestricted: r2(revenue.filter((r) => r.nac === 'with_restriction_purpose').reduce((s, r) => s + r.net, 0)),
       perpetual: r2(revenue.filter((r) => r.nac === 'with_restriction_perpetual').reduce((s, r) => s + r.net, 0)),
@@ -570,16 +626,100 @@ app.get('/api/portal/statements', requireRole('*'), (req, res) => {
       note: 'Revocable intentions are disclosed but not recognised as revenue under FASB ASC 958-605.',
       ...pipeline,
     },
+    period: year || 'Inception to date',
+    availableYears: datahub.fiscalYears().map((y) => y.year),
+  });
+});
+
+/** Year-on-year analysis across the whole ledger. */
+app.get('/api/portal/yoy', requireRole('*'), (req, res) => {
+  const years = datahub.fiscalYears().map((y) => y.year).sort();
+  const metric = (y, type) => db.prepare(`SELECT COALESCE(SUM(
+      CASE WHEN ? = 'revenue' THEN l.credit_amount - l.debit_amount
+           ELSE l.debit_amount - l.credit_amount END),0) v
+    FROM journal_lines l JOIN accounts a ON a.id=l.account_id
+    JOIN journal_entries e ON e.id=l.journal_entry_id
+    WHERE a.account_type = ? AND e.status='posted' AND substr(e.entry_date,1,4) = ?`)
+    .get(type, type, y).v;
+
+  const rows = years.map((y) => {
+    const revenue = r2(metric(y, 'revenue'));
+    const expense = r2(metric(y, 'expense'));
+    const cash = one(`SELECT COALESCE(SUM(amount),0) v, COUNT(*) n,
+        COUNT(DISTINCT donor_id) d FROM transactions
+      WHERE status='completed' AND substr(transaction_date,1,4) = ?`, y);
+    const byFunction = all(`SELECT a.account_code code, a.account_name name,
+        COALESCE(SUM(l.debit_amount)-SUM(l.credit_amount),0) v
+      FROM journal_lines l JOIN accounts a ON a.id=l.account_id
+      JOIN journal_entries e ON e.id=l.journal_entry_id
+      WHERE a.account_type='expense' AND substr(e.entry_date,1,4) = ?
+      GROUP BY a.id HAVING v != 0`, y);
+    const program = byFunction.find((f) => f.code === '5000')?.v || 0;
+    return {
+      year: y, revenue, expense, changeInNetAssets: r2(revenue - expense),
+      cashReceived: r2(cash.v), gifts: cash.n, donors: cash.d,
+      averageGift: cash.n ? r2(cash.v / cash.n) : 0,
+      programExpense: r2(program),
+      programRatio: expense > 0 ? r2((program / expense) * 100) : null,
+      entries: one('SELECT COUNT(*) n FROM journal_entries WHERE substr(entry_date,1,4) = ?', y).n,
+    };
+  });
+
+  rows.forEach((r, i) => {
+    const prev = rows[i - 1];
+    r.revenueGrowthPct = prev && prev.revenue ? r2(((r.revenue - prev.revenue) / Math.abs(prev.revenue)) * 100) : null;
+    r.cashGrowthPct = prev && prev.cashReceived ? r2(((r.cashReceived - prev.cashReceived) / Math.abs(prev.cashReceived)) * 100) : null;
+    r.donorGrowthPct = prev && prev.donors ? r2(((r.donors - prev.donors) / prev.donors) * 100) : null;
+  });
+
+  res.json({
+    years: rows,
+    byFundYear: all(`SELECT substr(t.transaction_date,1,4) year, f.fund_code, f.fund_name,
+        SUM(t.amount) v, COUNT(*) n
+      FROM transactions t JOIN funds f ON f.id=t.fund_id
+      WHERE t.status='completed' GROUP BY year, f.id ORDER BY year, v DESC`),
+    byMethodYear: all(`SELECT substr(transaction_date,1,4) year, payment_method, SUM(amount) v, COUNT(*) n
+      FROM transactions WHERE status='completed' GROUP BY year, payment_method ORDER BY year`),
   });
 });
 
 app.get('/api/portal/journal', requireRole('*'), (req, res) => {
   const limit = Math.min(200, parseInt(req.query.limit, 10) || 40);
-  const entries = all(`SELECT * FROM journal_entries ORDER BY entry_date DESC, created_at DESC LIMIT ?`, limit);
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+  const where = ['1=1'];
+  const p = {};
+  if (/^\d{4}$/.test(String(req.query.year || ''))) {
+    where.push('substr(e.entry_date,1,4) = @year'); p.year = String(req.query.year);
+  }
+  if (req.query.type) { where.push('e.entry_type = @type'); p.type = String(req.query.type); }
+  if (req.query.q) {
+    where.push('(lower(e.description) LIKE @q OR lower(COALESCE(e.reference_number,\'\')) LIKE @q)');
+    p.q = `%${String(req.query.q).toLowerCase()}%`;
+  }
+  if (req.query.account) {
+    where.push(`e.id IN (SELECT l.journal_entry_id FROM journal_lines l
+      JOIN accounts a ON a.id = l.account_id WHERE a.account_code = @account)`);
+    p.account = String(req.query.account);
+  }
+  if (req.query.fund) {
+    where.push(`e.id IN (SELECT l.journal_entry_id FROM journal_lines l
+      JOIN funds f ON f.id = l.fund_id WHERE f.fund_code = @fund)`);
+    p.fund = String(req.query.fund);
+  }
+  const whereSql = where.join(' AND ');
+  const total = db.prepare(`SELECT COUNT(*) n FROM journal_entries e WHERE ${whereSql}`).get(p).n;
+  const entries = db.prepare(`SELECT * FROM journal_entries e WHERE ${whereSql}
+    ORDER BY e.entry_date DESC, e.created_at DESC LIMIT @limit OFFSET @offset`)
+    .all({ ...p, limit, offset });
   const lines = db.prepare(`SELECT l.*, a.account_code, a.account_name, f.fund_code
     FROM journal_lines l JOIN accounts a ON a.id=l.account_id
     LEFT JOIN funds f ON f.id=l.fund_id WHERE l.journal_entry_id = ? ORDER BY l.line_number`);
-  res.json(entries.map((e) => ({ ...e, lines: lines.all(e.id) })));
+  res.json({
+    entries: entries.map((e) => ({ ...e, lines: lines.all(e.id) })),
+    total, limit, offset, hasMore: offset + entries.length < total,
+    availableYears: datahub.fiscalYears().map((y) => y.year),
+    entryTypes: all("SELECT entry_type t, COUNT(*) n FROM journal_entries GROUP BY t ORDER BY n DESC"),
+  });
 });
 
 app.post('/api/portal/journal', requireRole('super_admin', 'finance_director', 'accountant'), (req, res) => {
@@ -817,6 +957,47 @@ app.get('/api/portal/case-documents', requireRole('*'), (req, res) => {
   res.json(all(`SELECT cd.*, c.intake_full_name, c.state_of_residence, c.ai_priority
     FROM case_documents cd JOIN complex_cases c ON c.id = cd.case_id
     ORDER BY cd.received_at DESC`));
+});
+
+// ════════════════════════════ data hub ════════════════════════════════
+
+app.get('/api/portal/datahub', requireRole('*'), (req, res) => {
+  res.json({
+    inventory: datahub.inventory(),
+    quality: datahub.quality(),
+    fiscalYears: datahub.fiscalYears(),
+  });
+});
+
+app.get('/api/portal/datahub/:table', requireRole('*'), (req, res) => {
+  if (!datahub.isTable(req.params.table)) {
+    return res.status(404).json({ error: 'Unknown table' });
+  }
+  const filters = {};
+  for (const [k, v] of Object.entries(req.query)) {
+    const m = /^filter\[(.+)\]$/.exec(k);
+    if (m) filters[m[1]] = v;
+  }
+  try {
+    res.json(datahub.query(req.params.table, {
+      limit: req.query.limit, offset: req.query.offset, year: req.query.year,
+      q: req.query.q, sort: req.query.sort, dir: req.query.dir, filters,
+    }));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.get('/api/portal/datahub/:table/export.csv', requireRole('*'), (req, res) => {
+  if (!datahub.isTable(req.params.table)) {
+    return res.status(404).json({ error: 'Unknown table' });
+  }
+  audit({ action: 'EXPORT_DATA', user_id: req.user.sub, user_email: req.user.email,
+    user_role: req.user.role, resource_type: req.params.table, ip_address: ip(req) });
+  const csv = datahub.exportCsv(req.params.table, { year: req.query.year, q: req.query.q });
+  res.setHeader('content-type', 'text/csv; charset=utf-8');
+  res.setHeader('content-disposition', `attachment; filename="sankalpa-${req.params.table}.csv"`);
+  res.send(csv);
 });
 
 // ═══════════════════════════ static SPA ═══════════════════════════════

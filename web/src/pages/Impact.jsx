@@ -87,7 +87,7 @@ export default function Impact() {
           ))}
         </div>
 
-        <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr)', gap: 34, alignItems: 'start' }}>
+        <div className="split">
           <div>
             {/* recommendations */}
             {recommendations && (

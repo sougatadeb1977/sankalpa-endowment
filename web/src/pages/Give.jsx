@@ -117,7 +117,7 @@ export default function Give() {
 
         {!funds ? <Loading /> : (
           <form onSubmit={submit}>
-            <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1.55fr) minmax(0,1fr)', gap: 44, alignItems: 'start' }}>
+            <div className="split-wide">
               <div>
                 {/* amount */}
                 <div className="card" style={{ marginBottom: 26 }} data-tour="amount">

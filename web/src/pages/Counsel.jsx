@@ -159,7 +159,7 @@ export default function Counsel() {
         <div className="wrap">
           <Head over="Complex assets" title="When the gift does not fit a form."
             lede="A vineyard held in a company. Farmland across two states. Pre-public shares. These are the largest gifts we receive, and they should not be the hardest ones to make." />
-          <form onSubmit={submit} className="grid" style={{ gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', gap: 40, alignItems: 'start' }}>
+          <form onSubmit={submit} className="split">
             <div className="card">
               <div className="grid g2" style={{ gap: 0, columnGap: 20 }}>
                 <div className="field"><label htmlFor="n">Your name *</label>

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from './lib.jsx';
+import { useDraggable } from './useDraggable.js';
 
 /**
  * MAITRI — the floating guide.
@@ -10,6 +11,11 @@ import { Icon } from './lib.jsx';
  * describing, and narrates in a natural human voice using the browser's neural
  * speech voices, ranked so the best available voice is chosen automatically.
  * Everything she says is also on screen, so the tour works with sound off.
+ *
+ * Both the launcher and the panel can be dragged anywhere on screen - by mouse,
+ * finger or pen - because a fixed corner will always cover something somebody
+ * needs to read. The position is clamped to the viewport, survives a reload,
+ * and can be reset from the panel header.
  */
 
 const TOUR = [
@@ -67,15 +73,31 @@ const TOUR = [
   },
   {
     route: '/portal', spot: '[data-tour="portal"]', title: 'The other half of the platform',
-    say: 'Everything you have seen is the donor\'s half. Behind a multi-factor login sits the finance portal: a full double-entry general ledger, the statement of activities under the American nonprofit accounting standard, the actuarial forecast of every future gift, and an immutable audit trail. You can sign in and look for yourself — the credentials are on the screen.',
+    say: 'Everything you have seen is the donor\'s half. Behind a multi-factor login sits a complete fund accounting product. Not a dashboard — a product. There is a left-hand rail grouped the way a finance team actually works: overview, fund accounting, portfolio, relationships, and the system itself. Sign in and look for yourself; the credentials are printed on the screen.',
+  },
+  {
+    route: '/portal', title: 'A real general ledger',
+    say: 'The fund accounting section is the heart of it. A general journal holding four and a half thousand posted entries, filterable by account, by fund, by entry type, by period, or by free text. A trial balance that proves debits equal credits for whichever year you choose. The statement of activities and the statement of financial position under the American nonprofit accounting standard, with the prior year alongside every figure. And the full chart of accounts, which is never deleted from, only inactivated, so a fifteen-year-old entry still resolves.',
+  },
+  {
+    route: '/portal', title: 'Six years, compared',
+    say: 'Notice the fiscal year selector in the top bar. It drives every view that has a period, so the question of which year you are looking at is answered once rather than screen by screen. The year on year page then lays all six side by side: revenue, expenses, the change in net assets, cash received, donor counts, average gift, and the programme expense ratio — which is the number every serious donor and every charity rating agency looks at first.',
+  },
+  {
+    route: '/portal', title: 'The data hub',
+    say: 'And then the part I would want if I were the finance director. The data hub opens every one of the twenty-two tables the platform holds — twenty-two thousand rows — to be browsed, sorted, filtered by year, searched and exported to a spreadsheet. Underneath it, twelve integrity checks run against the live database every time the page loads: is the ledger in balance, does every entry balance individually, are there orphaned lines, is any completed gift missing from the ledger, are the valuations current. A finance team cannot be asked to trust a system whose contents it cannot inspect.',
   },
   {
     route: '/portal', title: 'Why the ledger matters to you',
-    say: 'Most charities ask you to trust them. This one shows you the books. Every gift you make writes a balanced journal entry the moment it is received. Debits equal credits, always, or the gift is refused. That is the difference between a promise and a proof.',
+    say: 'Most charities ask you to trust them. This one shows you the books. Every gift you make writes a balanced journal entry the moment it is received. Debits equal credits, always, or the gift is refused outright. That is the difference between a promise and a proof.',
   },
   {
     route: '/portal', title: 'And the part that remembers you',
     say: 'One more thing behind that login. A deferred gift can take thirty years to mature, and a relationship cannot depend on someone remembering. So the platform keeps its own memory: birthdays, giving anniversaries, supporters who have quietly drifted away, wills that ought to be re-confirmed after three years, insurance premiums that have started to slip. Every interaction is logged without anyone typing it. The follow-ups happen because the system raises them, not because a person did.',
+  },
+  {
+    route: '/portal', title: 'And an honest account of what is not finished',
+    say: 'The last page in that rail is a go-live plan, and it is deliberately candid. It says plainly what is real — the ledger, the actuarial engine, the document extraction, the stewardship automation — and what is not: no card is actually charged yet, scanned documents are not yet read by optical character recognition, and staff sign-in still uses demonstration credentials. Then it sequences the twenty weeks of work that would close the gap, with costs. A platform that hides its gaps is harder to trust than one that lists them.',
   },
   {
     route: '/about', title: 'Forty-five years of quiet work',
@@ -114,6 +136,10 @@ export default function Guide() {
   const location = useLocation();
   const speakingRef = useRef(false);
   const autoRef = useRef(null);
+
+  // Panel and launcher remember where the reader put them, separately.
+  const panelDrag = useDraggable({ storageKey: 'sankalpa_guide_pos', margin: 8 });
+  const fabDrag = useDraggable({ storageKey: 'sankalpa_fab_pos', margin: 12 });
 
   const supported = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
@@ -246,7 +272,14 @@ export default function Guide() {
             </div>
           </div>
         )}
-        <button className="guide-fab" onClick={start} aria-label="Open Maitri, your guided tour">
+        <button
+          ref={fabDrag.elRef}
+          className={`guide-fab${fabDrag.dragging ? ' dragging' : ''}`}
+          style={fabDrag.style}
+          {...fabDrag.handleProps}
+          onClick={() => { if (!fabDrag.moved()) start(); }}
+          title="Open the guided tour — drag to move"
+          aria-label="Open Maitri, your guided tour. Drag to reposition.">
           <Icon.lotus width={30} height={30} stroke="#fff" strokeWidth={1.4} />
         </button>
       </>
@@ -256,8 +289,17 @@ export default function Guide() {
   return (
     <>
       {spot && <div className="spotlight" style={spot} aria-hidden="true" />}
-      <aside className="guide-panel" role="complementary" aria-label="Maitri, guided tour">
-        <div className="guide-head">
+      <aside
+        ref={panelDrag.elRef}
+        className={`guide-panel${panelDrag.dragging ? ' dragging' : ''}`}
+        style={panelDrag.style}
+        role="complementary" aria-label="Maitri, guided tour">
+        <div
+          className="guide-head"
+          {...panelDrag.handleProps}
+          onDoubleClick={panelDrag.reset}
+          title="Drag to move — double-click to snap back">
+          <span className="guide-grip" aria-hidden="true"><i /><i /><i /></span>
           <div className={`guide-avatar${playing && !muted ? ' speaking' : ''}`}>
             <Icon.lotus width={22} height={22} stroke="#fff" strokeWidth={1.5} />
           </div>
@@ -265,7 +307,13 @@ export default function Guide() {
             <div className="guide-name">Maitri</div>
             <div className="guide-role">Your guide</div>
           </div>
-          <button className="guide-x" onClick={close} aria-label="Close the guide">×</button>
+          {panelDrag.isPlaced && (
+            <button className="guide-x" onClick={panelDrag.reset}
+              title="Snap back to the corner" aria-label="Snap the guide back to the corner"
+              style={{ marginLeft: 'auto', fontSize: 15 }}>⤢</button>
+          )}
+          <button className="guide-x" onClick={close} aria-label="Close the guide"
+            style={panelDrag.isPlaced ? { marginLeft: 0 } : undefined}>×</button>
         </div>
 
         <div className="guide-body">
@@ -298,6 +346,8 @@ export default function Guide() {
         </div>
 
         <div className="guide-voice-note">
+          <span className="guide-drag-hint">Drag the header to move me</span>
+          <br />
           {!supported ? 'Your browser does not offer speech, so the tour runs as text.'
             : voices.length ? (
               <>Voice:{' '}

@@ -68,8 +68,7 @@ export default function Vault() {
         <Head over="Secure document vault" title="The AI that reads estate documents."
           lede="Wills and trusts are long, and reviewing them by hand is slow. Paste one in and the engine extracts what matters, scores its own confidence, and sends anything uncertain to a human being rather than into your record." />
 
-        <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 40, alignItems: 'start' }}
-          data-tour="vault">
+        <div className="split-even" data-tour="vault">
           <div>
             <div className={`vault-drop${over ? ' over' : ''}`}
               onDragOver={(e) => { e.preventDefault(); setOver(true); }}
