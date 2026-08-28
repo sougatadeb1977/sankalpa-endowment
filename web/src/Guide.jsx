@@ -21,15 +21,19 @@ import { useDraggable } from './useDraggable.js';
 const TOUR = [
   {
     route: '/', title: 'Welcome to Sankalpa',
-    say: 'Welcome. I am Maitri, your guide. Sankalpa is a Sanskrit word for a sacred intention held in the heart — the vow you make to yourself about the world you wish to leave behind. This platform carries that intention from the moment you feel it, all the way to the programmes it will fund a hundred years from now. Let me walk you through every step. It takes about four minutes.',
+    say: 'Welcome. I am Maitri, your guide. Sankalpa is a Sanskrit word for a sacred intention held in the heart — the vow you make to yourself about the world you wish to leave behind. This platform carries that intention from the moment you feel it, all the way to the programmes it will fund a hundred years from now. Each page is arranged in tabs, so nothing is buried at the bottom of a long scroll — I will open the right one as we go. Let me walk you through every step.',
   },
   {
     route: '/', spot: '[data-tour="meter"]', title: 'One promise, measured openly',
     say: 'This is the endowment. Forty-five million dollars, raised once, invested permanently, so that Gurudev\'s work is never again at the mercy of a difficult year. The bar you see moves in real time. It counts cash already received, and the present value of every gift promised for the future. Nothing here is rounded up or dressed up.',
   },
   {
-    route: '/', spot: '[data-tour="funds"]', title: 'Choose where your gift lives',
+    route: '/', tab: 'funds', spot: '[data-tour="funds"]', title: 'Choose where your gift lives',
     say: 'You can give to the permanent endowment, or direct your gift to youth leadership, veteran and trauma relief, rural education, or disaster response. Every restricted gift is tracked in its own net asset class, which is an accounting way of saying: money given for children can never quietly be spent on something else.',
+  },
+  {
+    route: '/', tab: 'reach', title: 'The world it comes from',
+    say: 'This is where the money actually comes from. Every marker is a country with supporters in it, and each is sized by what has been given there — the United States and India largest, then Germany, Britain, Switzerland, Sweden, Singapore, Kenya, Brazil. Peace does not belong to one country, and neither does this endowment.',
   },
   {
     route: '/give', spot: '[data-tour="amount"]', title: 'Giving today',
@@ -40,23 +44,23 @@ const TOUR = [
     say: 'Card, bank transfer, PayPal, Apple Pay, Google Pay, donor advised fund, cryptocurrency, appreciated stock, or a cheque in the post. Supporters give from a hundred and eighty countries, so we meet you where you are. Your card details never touch our servers — they go straight to the payment processor.',
   },
   {
-    route: '/planned-giving', title: 'The seven ways to leave a legacy',
+    route: '/planned-giving', tab: 'ways', title: 'The seven ways to leave a legacy',
     say: 'Now the heart of it. A legacy gift costs you nothing today. Name the Foundation in your will. Leave a percentage of a retirement account, which passes to charity completely untaxed. Assign a life insurance policy you no longer need. Give appreciated shares and avoid capital gains entirely. Or set up a trust that pays you an income for life, and gives what remains to the Foundation.',
   },
   {
-    route: '/planned-giving', title: 'We hand you to the right tool',
+    route: '/planned-giving', tab: 'partners', title: 'We hand you to the right tool',
     say: 'The Foundation does not pretend to be a law firm or a brokerage. Write your will free of charge through FreeWill. Transfer shares in a few clicks through DonateStock. Run your own fundraiser through GoFundMe dot org. Each is a real partner, and each sends the record back here automatically, so nothing depends on anyone re-typing it.',
   },
   {
-    route: '/calculators', spot: '[data-tour="calc"]', title: 'Real numbers, not brochure numbers',
+    route: '/calculators', tab: 'legacy', spot: '[data-tour="calc"]', title: 'Real numbers, not brochure numbers',
     say: 'Six calculators, and all of them run genuine actuarial mathematics on our server — Social Security mortality tables, the current I.R.S. section seven five two zero rate, and the American Council on Gift Annuities schedule. Move the sliders. If a gift annuity would pay you six point one percent for life, it says six point one percent, because that is what the table says.',
   },
   {
-    route: '/calculators', title: 'The retirement account tab is the one to read',
+    route: '/calculators', tab: 'ira', title: 'The retirement account tab is the one to read',
     say: 'If you take one thing from this tour, take this. Money left in a four-oh-one-k or an I.R.A. is taxed as income when your children inherit it — they can lose a third of it. Left to a charity, not a cent is lost, because a charity pays no income tax. The calculator shows you both columns side by side, and then walks you through the beneficiary form for your own custodian, step by step. It takes ten minutes and costs nothing.',
   },
   {
-    route: '/calculators', title: 'And shares, rather than cash',
+    route: '/calculators', tab: 'stock', title: 'And shares, rather than cash',
     say: 'The appreciated stock tab makes the other argument. Sell shares first and the capital gains tax comes out before the Foundation sees anything. Transfer the shares instead and nobody realises the gain, so nobody pays the tax. We show it two honest ways — same block of stock, and same gift delivered — because a single view of that comparison is always a little misleading.',
   },
   {
@@ -68,7 +72,7 @@ const TOUR = [
     say: 'Once you have given, this becomes your home. Your lifetime giving, the lives it has touched, your pledges, your documents, and a small set of suggestions chosen for you — never a fundraising push, only the next step that genuinely fits your situation and your age.',
   },
   {
-    route: '/counsel', title: 'When a gift is complicated',
+    route: '/counsel', tab: 'network', title: 'When a gift is complicated',
     say: 'Some gifts do not fit a form. A vineyard held in a company. Farmland across two states. Pre-public shares. Tell us what you hold, and the platform triages it in seconds, matches you to a firm licensed in your own state, and commits to a time by which someone will call. Estate law is state law, so no single firm covers the country — instead there is a panel, covering every state where our supporters actually live. You engage and pay the adviser directly, which is precisely why their advice about a gift to us can be trusted. When the plan is signed, you send us the outcome only, and we track it from there.',
   },
   {
@@ -214,8 +218,14 @@ export default function Guide() {
     const s = TOUR[i];
     if (!s) { setPlaying(false); setSpot(null); return; }
     if (location.pathname !== s.route) navigate(s.route);
+    // Pages are tabbed, so a step may need to open the panel it is describing.
+    // Tabs mirror their selection into the hash and listen for hashchange, so
+    // setting the hash is enough to switch panel from here.
+    if (s.tab && window.location.hash.replace(/^#/, '') !== s.tab) {
+      setTimeout(() => { window.location.hash = s.tab; }, 120);
+    }
     setSpot(null);
-    setTimeout(() => placeSpot(s.spot), s.spot ? 260 : 0);
+    setTimeout(() => placeSpot(s.spot), s.spot ? 420 : 0);
     if (!s.spot) window.scrollTo({ top: 0, behavior: 'smooth' });
     speak(s.say, () => {
       setStep((cur) => {

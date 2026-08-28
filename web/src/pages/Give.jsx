@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, useApi, money, compact, Head, Icon, Loading } from '../lib.jsx';
+import { api, useApi, money, Head, Icon, Loading, Tabs } from '../lib.jsx';
 
 const AMOUNTS = [50, 108, 250, 500, 1000, 2500];
 const METHODS = [
@@ -119,6 +119,8 @@ export default function Give() {
           <form onSubmit={submit}>
             <div className="split-wide">
               <div>
+                <Tabs hashKey="give" sticky={false} tabs={[
+                  { id: 'amount', label: '1 · Your gift', render: () => (<>
                 {/* amount */}
                 <div className="card" style={{ marginBottom: 26 }} data-tour="amount">
                   <div className="overline">Your gift</div>
@@ -159,6 +161,8 @@ export default function Give() {
                   {selectedFund && <p className="small muted" style={{ marginBottom: 0 }}>{selectedFund.blurb}</p>}
                 </div>
 
+                  </>) },
+                  { id: 'method', label: '2 · How you give', render: () => (<>
                 {/* method */}
                 <div className="card" style={{ marginBottom: 26 }} data-tour="methods">
                   <div className="overline">How you would like to give</div>
@@ -178,6 +182,8 @@ export default function Give() {
                   </p>
                 </div>
 
+                  </>) },
+                  { id: 'details', label: '3 · Your details', render: () => (<>
                 {/* details */}
                 <div className="card">
                   <div className="overline">Your details, for the tax receipt</div>
@@ -217,6 +223,8 @@ export default function Give() {
                     </div>
                   )}
                 </div>
+                  </>) },
+                ]} />
               </div>
 
               {/* summary rail */}

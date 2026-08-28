@@ -310,6 +310,87 @@ export function Modal({ onClose, children, width }) {
   );
 }
 
+
+/**
+ * Tabs.
+ *
+ * Long editorial scrolls bury everything below the first screen. These chunk a
+ * page into panels the reader chooses between, and they are real tabs: proper
+ * tablist/tab/tabpanel roles, arrow-key and Home/End navigation, roving
+ * tabindex. The selected tab is mirrored into the URL hash so a panel can be
+ * linked to and survives a reload.
+ */
+export function Tabs({ tabs, initial, hashKey, sticky = true, onChange }) {
+  const ids = tabs.map((t) => t.id);
+  const fromHash = () => {
+    if (!hashKey || typeof window === 'undefined') return null;
+    const h = window.location.hash.replace(/^#/, '');
+    return ids.includes(h) ? h : null;
+  };
+  const [active, setActive] = useState(() => fromHash() || initial || ids[0]);
+  const listRef = useRef(null);
+
+  useEffect(() => {
+    if (!hashKey) return undefined;
+    const onHash = () => { const h = fromHash(); if (h) setActive(h); };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hashKey]);
+
+  const select = (id) => {
+    setActive(id);
+    onChange?.(id);
+    if (hashKey && typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `#${id}`);
+    }
+    // Bring the panel top into view, but only when the tab strip has scrolled
+    // out of sight - otherwise the jump is disorienting.
+    const el = listRef.current;
+    if (el && el.getBoundingClientRect().top < 0) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const onKey = (e) => {
+    const i = ids.indexOf(active);
+    let next = null;
+    if (e.key === 'ArrowRight') next = ids[(i + 1) % ids.length];
+    else if (e.key === 'ArrowLeft') next = ids[(i - 1 + ids.length) % ids.length];
+    else if (e.key === 'Home') next = ids[0];
+    else if (e.key === 'End') next = ids[ids.length - 1];
+    if (!next) return;
+    e.preventDefault();
+    select(next);
+    listRef.current?.querySelector(`[data-tab="${next}"]`)?.focus();
+  };
+
+  const current = tabs.find((t) => t.id === active) || tabs[0];
+
+  return (
+    <div className="tabs">
+      <div className={`tabstrip${sticky ? ' sticky' : ''}`} ref={listRef}>
+        <div className="tabstrip-inner" role="tablist" onKeyDown={onKey}>
+          {tabs.map((t) => (
+            <button key={t.id} data-tab={t.id} role="tab" type="button"
+              id={`tab-${t.id}`} aria-controls={`panel-${t.id}`}
+              aria-selected={t.id === active} tabIndex={t.id === active ? 0 : -1}
+              className={`tab${t.id === active ? ' on' : ''}`}
+              onClick={() => select(t.id)}>
+              {t.label}
+              {t.count != null && <span className="tab-count">{t.count}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div role="tabpanel" id={`panel-${current.id}`} aria-labelledby={`tab-${current.id}`}
+        className="tabpanel" key={current.id}>
+        {typeof current.render === 'function' ? current.render() : current.content}
+      </div>
+    </div>
+  );
+}
+
 /** Section heading with overline. */
 export function Head({ over, title, lede, center, light }) {
   return (

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  api, money, compact, num, dateFmt, titleize, Head, Icon, Loading, LineChart, BarList, PALETTE,
+  api, money, compact, num, dateFmt, titleize, Head, Icon, Loading, LineChart, BarList, PALETTE, Tabs,
 } from '../lib.jsx';
 
 export default function Impact() {
@@ -87,151 +87,154 @@ export default function Impact() {
           ))}
         </div>
 
-        <div className="split">
-          <div>
-            {/* recommendations */}
-            {recommendations && (
-              <div className="card" style={{ marginBottom: 26 }}>
-                <div className="between" style={{ marginBottom: 14 }}>
-                  <div className="overline" style={{ margin: 0 }}>Chosen for you</div>
-                  <span className="badge b-review">Propensity {recommendations.propensityScore}/100 · {recommendations.band}</span>
-                </div>
-                <p className="small muted" style={{ marginBottom: 20 }}>{recommendations.narrative}</p>
-                {recommendations.actions.map((a, i) => (
-                  <div key={i} style={{
-                    padding: '18px 0', borderTop: '1px solid var(--border)',
-                    display: 'flex', gap: 16, alignItems: 'flex-start',
-                  }}>
-                    <span className="serif-num" style={{ fontSize: 19, color: 'var(--saffron)', flex: 'none', width: 24 }}>
-                      {i + 1}
-                    </span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontFamily: 'var(--serif)', fontSize: 19, color: 'var(--indigo)', marginBottom: 5 }}>{a.title}</div>
-                      <p className="small muted" style={{ marginBottom: 8 }}>{a.body}</p>
-                      <Link to={a.href} className="link-gold">{a.cta} →</Link>
+        <Tabs hashKey="impact" tabs={[
+          {
+            id: 'overview', label: 'Overview',
+            render: () => (
+              <div className="split">
+                <div>
+                  {recommendations && (
+                    <div className="card">
+                      <div className="between" style={{ marginBottom: 14 }}>
+                        <div className="overline" style={{ margin: 0 }}>Chosen for you</div>
+                        <span className="badge b-review">
+                          Propensity {recommendations.propensityScore}/100 · {recommendations.band}
+                        </span>
+                      </div>
+                      <p className="small muted" style={{ marginBottom: 18 }}>{recommendations.narrative}</p>
+                      {recommendations.actions.map((a, i) => (
+                        <div key={i} style={{ padding: '16px 0', borderTop: '1px solid var(--border)', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                          <span className="serif-num" style={{ fontSize: 17, color: 'var(--saffron)', flex: 'none', width: 22, fontWeight: 700 }}>{i + 1}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontFamily: 'var(--serif)', fontSize: 17, fontWeight: 700, color: 'var(--indigo)', marginBottom: 4 }}>{a.title}</div>
+                            <p className="small muted" style={{ marginBottom: 8 }}>{a.body}</p>
+                            <Link to={a.href} className="link-gold">{a.cta} →</Link>
+                          </div>
+                        </div>
+                      ))}
                     </div>
+                  )}
+                </div>
+                <aside>
+                  {givingByFund.length > 0 && (
+                    <div className="card" style={{ marginBottom: 20 }}>
+                      <div className="overline">Where your giving went</div>
+                      <BarList items={givingByFund.map((f, i) => ({
+                        label: f.fund_name, value: f.total, color: PALETTE[i % PALETTE.length],
+                        note: f.impact_cost_per_unit ? `${Math.round(f.total / f.impact_cost_per_unit).toLocaleString()} ${f.impact_unit.split(' ').slice(0, 2).join(' ')}` : null,
+                      }))} />
+                    </div>
+                  )}
+                  <div className="card card-feature" style={{ background: 'var(--lotus)' }}>
+                    <div className="overline">Thank you</div>
+                    <p className="quote" style={{ fontSize: 18 }}>“Love in action is service.”</p>
+                    <p className="tiny muted" style={{ marginBottom: 0 }}>Gurudev Sri Sri Ravi Shankar</p>
                   </div>
-                ))}
+                </aside>
               </div>
-            )}
-
-            {/* giving history */}
-            {givingByYear.length > 1 && (
-              <div className="card" style={{ marginBottom: 26 }}>
-                <div className="overline">Your giving, year by year</div>
-                <LineChart data={givingByYear.map((y) => ({ label: y.year, value: y.total }))} height={200} />
+            ),
+          },
+          {
+            id: 'history', label: 'Giving history', count: transactions.length,
+            render: () => (
+              <div>
+                {givingByYear.length > 1 && (
+                  <div className="card" style={{ marginBottom: 22 }}>
+                    <div className="overline">Your giving, year by year</div>
+                    <LineChart data={givingByYear.map((y) => ({ label: y.year, value: y.total }))} height={210} />
+                  </div>
+                )}
+                <div className="card">
+                  <div className="overline">Every gift</div>
+                  <div className="table-scroll" style={{ maxHeight: 520, overflowY: 'auto' }}>
+                    <table className="data">
+                      <thead><tr><th>Date</th><th>Fund</th><th>Method</th><th className="r">Amount</th><th>Status</th></tr></thead>
+                      <tbody>
+                        {transactions.map((t) => (
+                          <tr key={t.id}>
+                            <td>{dateFmt(t.transaction_date)}</td>
+                            <td>{t.fund_name}</td>
+                            <td className="muted">{titleize(t.payment_method)}</td>
+                            <td className="r">{money(t.amount, 2)}</td>
+                            <td><span className={`badge ${t.status === 'completed' ? 'b-active' : t.status === 'pending' ? 'b-pending' : 'b-lapsed'}`}>{t.status}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-            )}
-
-            {/* transactions */}
-            <div className="card" style={{ marginBottom: 26 }}>
-              <div className="overline">Recent gifts</div>
-              <div className="table-scroll">
-                <table className="data">
-                  <thead><tr><th>Date</th><th>Fund</th><th>Method</th><th className="r">Amount</th><th>Status</th></tr></thead>
-                  <tbody>
-                    {transactions.slice(0, 12).map((t) => (
-                      <tr key={t.id}>
-                        <td>{dateFmt(t.transaction_date)}</td>
-                        <td>{t.fund_name}</td>
-                        <td className="muted">{titleize(t.payment_method)}</td>
-                        <td className="r">{money(t.amount, 2)}</td>
-                        <td><span className={`badge ${t.status === 'completed' ? 'b-active' : t.status === 'pending' ? 'b-pending' : 'b-lapsed'}`}>{t.status}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            ),
+          },
+          {
+            id: 'legacy', label: 'Pledges & legacy', count: pledges.length + plannedGifts.length,
+            render: () => (
+              <div className="split-even">
+                <div className="card">
+                  <div className="overline">Your pledges and commitments</div>
+                  {pledges.length ? pledges.map((p) => (
+                    <div key={p.id} className="between" style={{ padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{titleize(p.pledge_type)}</div>
+                        <div className="tiny muted">{p.fund_name} · committed {dateFmt(p.commitment_date)}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div className="num" style={{ fontWeight: 600 }}>{money(p.face_value)}</div>
+                        <span className={`badge b-${p.status === 'active' ? 'active' : p.status === 'committed' ? 'committed' : 'prospect'}`}>{p.status}</span>
+                      </div>
+                    </div>
+                  )) : <p className="small muted" style={{ marginBottom: 0 }}>No pledges recorded yet.</p>}
+                </div>
+                <div className="card">
+                  <div className="overline">Legacy instruments</div>
+                  {plannedGifts.length ? plannedGifts.map((g) => (
+                    <div key={g.id} style={{ padding: '13px 0', borderBottom: '1px solid var(--border)' }}>
+                      <div className="between">
+                        <span style={{ fontWeight: 600, fontSize: 14 }}>{titleize(g.gift_type)}</span>
+                        <span className="num small">{money(g.npv)}</span>
+                      </div>
+                      <div className="tiny muted">
+                        Present value · expected {g.expected_receipt_year || '—'}
+                        {g.ai_extracted ? ' · AI-extracted from your documents' : ''}
+                      </div>
+                    </div>
+                  )) : (
+                    <p className="small muted" style={{ marginBottom: 0 }}>
+                      Nothing documented yet. A gift in your will costs nothing today —{' '}
+                      <Link to="/planned-giving" className="link-gold" style={{ textTransform: 'none', fontSize: 13.5 }}>see how it works</Link>.
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-
-            {/* pledges */}
-            {pledges.length > 0 && (
+            ),
+          },
+          {
+            id: 'documents', label: 'Document vault', count: documents.length,
+            render: () => (
               <div className="card">
-                <div className="overline">Your pledges and commitments</div>
-                {pledges.map((p) => (
-                  <div key={p.id} className="between" style={{ padding: '15px 0', borderBottom: '1px solid var(--border)' }}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 14.5 }}>{titleize(p.pledge_type)}</div>
-                      <div className="tiny muted">{p.fund_name} · committed {dateFmt(p.commitment_date)}</div>
+                <div className="between" style={{ marginBottom: 12 }}>
+                  <div className="overline" style={{ margin: 0 }}>Your estate documents</div>
+                  <Link to="/vault" className="link-gold" style={{ fontSize: 11 }}>Upload another →</Link>
+                </div>
+                {documents.length ? documents.map((d) => (
+                  <div key={d.id} className="between" style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0 }}>
+                      <Icon.doc width={16} height={16} style={{ color: 'var(--earth)', flex: 'none' }} />
+                      <span className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.file_name}</span>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div className="num" style={{ fontWeight: 600 }}>{money(p.face_value)}</div>
-                      <span className={`badge b-${p.status === 'active' ? 'active' : p.status === 'committed' ? 'committed' : 'prospect'}`}>{p.status}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <aside>
-            {/* fund split */}
-            {givingByFund.length > 0 && (
-              <div className="card" style={{ marginBottom: 22 }}>
-                <div className="overline">Where your giving went</div>
-                <BarList items={givingByFund.map((f, i) => ({
-                  label: f.fund_name, value: f.total, color: PALETTE[i % PALETTE.length],
-                  note: f.impact_cost_per_unit ? `${Math.round(f.total / f.impact_cost_per_unit).toLocaleString()} ${f.impact_unit.split(' ').slice(0, 2).join(' ')}` : null,
-                }))} />
-              </div>
-            )}
-
-            {/* documents */}
-            <div className="card" style={{ marginBottom: 22 }}>
-              <div className="between" style={{ marginBottom: 12 }}>
-                <div className="overline" style={{ margin: 0 }}>Document vault</div>
-                <Link to="/vault" className="link-gold" style={{ fontSize: 11 }}>Open →</Link>
-              </div>
-              {documents.length ? documents.slice(0, 5).map((d) => (
-                <div key={d.id} className="between" style={{ padding: '11px 0', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0 }}>
-                    <Icon.doc width={16} height={16} style={{ color: 'var(--earth)', flex: 'none' }} />
-                    <span className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {d.file_name}
+                    <span className={`badge ${d.parse_status === 'completed' ? 'b-active' : d.parse_status === 'needs_review' ? 'b-pending' : 'b-lapsed'}`} style={{ flex: 'none' }}>
+                      {d.parse_status === 'completed' ? 'verified' : d.parse_status.replace('_', ' ')}
                     </span>
                   </div>
-                  <span className={`badge ${d.parse_status === 'completed' ? 'b-active' : d.parse_status === 'needs_review' ? 'b-pending' : 'b-lapsed'}`}
-                    style={{ flex: 'none' }}>
-                    {d.parse_status === 'completed' ? 'verified' : d.parse_status.replace('_', ' ')}
-                  </span>
-                </div>
-              )) : (
-                <p className="small muted" style={{ marginBottom: 0 }}>
-                  Nothing stored yet. Uploading your will or beneficiary form lets us honour your wishes exactly.
-                </p>
-              )}
-            </div>
-
-            {/* planned gifts */}
-            {plannedGifts.length > 0 && (
-              <div className="card" style={{ marginBottom: 22 }}>
-                <div className="overline">Legacy instruments</div>
-                {plannedGifts.map((g) => (
-                  <div key={g.id} style={{ padding: '13px 0', borderBottom: '1px solid var(--border)' }}>
-                    <div className="between">
-                      <span style={{ fontWeight: 600, fontSize: 14 }}>{titleize(g.gift_type)}</span>
-                      <span className="num small">{money(g.npv)}</span>
-                    </div>
-                    <div className="tiny muted">
-                      Present value · expected {g.expected_receipt_year || '—'}
-                      {g.ai_extracted ? ' · AI-extracted from your documents' : ''}
-                    </div>
-                  </div>
-                ))}
+                )) : (
+                  <p className="small muted" style={{ marginBottom: 0 }}>
+                    Nothing stored yet. Uploading your will or beneficiary form lets us honour your wishes exactly.
+                  </p>
+                )}
               </div>
-            )}
-
-            <div className="card card-feature" style={{ background: 'var(--lotus)' }}>
-              <div className="overline">Thank you</div>
-              <p className="quote" style={{ fontSize: 19 }}>
-                “Love in action is service.”
-              </p>
-              <p className="tiny muted" style={{ marginBottom: 0 }}>
-                Gurudev Sri Sri Ravi Shankar
-              </p>
-            </div>
-          </aside>
-        </div>
+            ),
+          },
+        ]} />
       </div>
     </section>
   );

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, Head, Icon, useReveal } from '../lib.jsx';
+import { api, Head, Icon, Tabs } from '../lib.jsx';
 
 const VEHICLES = [
   {
@@ -58,7 +58,7 @@ export default function PlannedGiving() {
   const [open, setOpen] = useState('will');
   const [partners, setPartners] = useState(null);
   useEffect(() => { api('/partners').then(setPartners).catch(() => {}); }, []);
-  useReveal(partners);
+
   return (
     <>
       <section className="section-tight" style={{ background: 'var(--lotus)', borderBottom: '1px solid var(--border)', paddingTop: 92, paddingBottom: 82 }}>
@@ -75,137 +75,141 @@ export default function PlannedGiving() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" style={{ paddingTop: 34 }}>
         <div className="wrap">
-          <Head center over="Seven ways" title="Find the one that fits your life"
-            lede="Not every gift suits every person. Read the one that sounds like you — and ignore the rest." />
-          <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr)', gap: 0 }}>
-            {VEHICLES.map((v, i) => {
-              const isOpen = open === v.key;
-              return (
-                <article key={v.key} className="reveal"
-                  style={{ borderTop: i === 0 ? '1px solid var(--border)' : 0, borderBottom: '1px solid var(--border)' }}>
-                  <button onClick={() => setOpen(isOpen ? null : v.key)}
-                    aria-expanded={isOpen}
-                    style={{
-                      width: '100%', background: 'none', border: 0, cursor: 'pointer', textAlign: 'left',
-                      padding: '30px 0', display: 'flex', gap: 24, alignItems: 'baseline',
-                    }}>
-                    <span className="serif-num" style={{ fontSize: 22, color: 'var(--saffron)', flex: 'none', width: 34 }}>
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <span style={{ flex: 1 }}>
-                      <span className="h-sub" style={{ display: 'block', marginBottom: 5 }}>{v.name}</span>
-                      <span className="small" style={{ color: 'var(--earth)', fontWeight: 600 }}>{v.tag}</span>
-                    </span>
-                    <span style={{ flex: 'none', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .3s', color: 'var(--indigo)' }}>
-                      <Icon.arrow width={20} height={20} />
-                    </span>
-                  </button>
-                  {isOpen && (
-                    <div style={{ paddingBottom: 40, paddingLeft: 58 }}>
-                      <p className="lede" style={{ maxWidth: '58ch' }}>{v.line}</p>
-                      <div className="grid g3" style={{ marginTop: 26, gap: 30 }}>
-                        <div>
-                          <div className="overline">Right for you if</div>
-                          <p className="small">{v.good}</p>
-                        </div>
-                        <div>
-                          <div className="overline">How it works</div>
-                          <ol style={{ paddingLeft: 18, margin: 0, fontSize: 13.5, lineHeight: 1.75 }}>
-                            {v.how.map((h) => <li key={h} style={{ marginBottom: 6 }}>{h}</li>)}
-                          </ol>
-                        </div>
-                        <div>
-                          <div className="overline">The benefit</div>
-                          <p className="small">{v.benefit}</p>
-                          <Link to={v.key === 'complex' ? '/counsel' : '/calculators'} className="link-gold">
-                            {v.key === 'complex' ? 'Speak to a specialist →' : 'Calculate my gift →'}
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ─────────────── partner handoffs ─────────────── */}
-      <section className="section section-warm">
-        <div className="wrap">
-          <Head center over="Doing it is the easy part"
-            title="We hand you to the best tool for the job"
-            lede="The Foundation does not try to be a law firm or a brokerage. For each vehicle we hand you to a partner that does it properly — and the record comes back to us automatically." />
-          <div className="grid g3">
-            {(partners || []).filter((p) => ['freewill', 'donatestock', 'gofundme'].includes(p.key)).map((p) => (
-              <article key={p.key} className="card card-lift reveal" style={{ borderTop: '2px solid var(--saffron)' }}>
-                <div className="overline">{p.role}</div>
-                <h3 className="h-sub" style={{ marginBottom: 12 }}>{p.name}</h3>
-                <p className="small muted" style={{ minHeight: 96 }}>{p.blurb}</p>
-                <a href={p.url} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-gold">
-                  {p.action} <Icon.arrow width={14} height={14} />
-                </a>
-                {p.handoff && (
-                  <p className="tiny muted" style={{ marginTop: 16, marginBottom: 0 }}>{p.handoff}</p>
-                )}
-              </article>
-            ))}
-          </div>
-          <div className="card reveal" style={{ marginTop: 30, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-            <Icon.doc width={22} height={22} style={{ color: 'var(--earth)', flex: 'none', marginTop: 2 }} />
-            <p className="small muted" style={{ marginBottom: 0 }}>
-              Already have a will or trust? You do not need to rewrite it. Upload it to the{' '}
-              <Link to="/vault" className="link-gold" style={{ textTransform: 'none', fontSize: 13.5 }}>document vault</Link>{' '}
-              and the AI parsing engine will read it, confirm the Foundation is named correctly, and extract
-              the allocation — so nothing depends on anyone re-typing it.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="section">
-        <div className="wrap">
-          <div className="grid g2" style={{ gap: 60, alignItems: 'center' }}>
-            <div className="reveal">
-              <div className="overline">The Sankalpa Legacy Circle</div>
-              <h2 className="h-section">Tell us, and we can plan.</h2>
-              <p className="lede" style={{ marginTop: 20 }}>
-                A legacy gift you have told us about is worth far more than a secret one — not in money,
-                but in certainty. It lets the Foundation commit to a school, a programme, a decade.
-              </p>
-              <p className="muted">
-                Everyone who documents a legacy intention joins the Legacy Circle. There is no minimum.
-                There is no obligation — a revocable gift stays revocable, always. What you receive is an
-                annual account of exactly what your intention is already making possible, and an open door
-                at every centre in the world.
-              </p>
-              <div className="row" style={{ marginTop: 28 }}>
-                <Link to="/vault" className="btn">Document my intention</Link>
-                <Link to="/counsel" className="btn btn-ghost">Talk to someone first</Link>
-              </div>
-            </div>
-            <div className="card card-feature reveal" style={{ padding: 40 }}>
-              <div className="overline">What we will need, eventually</div>
-              {[
-                ['Legal name', 'Art of Living Foundation'],
-                ['Tax status', '501(c)(3) public charity'],
-                ['EIN', '95-4386417'],
-                ['Suggested wording', '"I give ___ percent of my residuary estate to the Art of Living Foundation, a California nonprofit corporation, for its general endowment purposes."'],
-              ].map(([l, v]) => (
-                <div key={l} style={{ padding: '15px 0', borderBottom: '1px solid var(--border)' }}>
-                  <div className="overline" style={{ marginBottom: 6 }}>{l}</div>
-                  <div style={{ fontSize: 14.5, fontFamily: l === 'Suggested wording' ? 'var(--serif)' : undefined, fontStyle: l === 'Suggested wording' ? 'italic' : undefined }}>{v}</div>
+          <Tabs hashKey="legacy" tabs={[
+            {
+              id: 'ways', label: 'Seven ways to give', count: VEHICLES.length,
+              render: () => (
+                <div>
+                  <Head center over="Seven ways" title="Find the one that fits your life"
+                    lede="Not every gift suits every person. Read the one that sounds like you — and ignore the rest." />
+                  <div>
+                    {VEHICLES.map((v, i) => {
+                      const isOpen = open === v.key;
+                      return (
+                        <article key={v.key}
+                          style={{ borderTop: i === 0 ? '1px solid var(--border)' : 0, borderBottom: '1px solid var(--border)' }}>
+                          <button onClick={() => setOpen(isOpen ? null : v.key)} aria-expanded={isOpen}
+                            style={{ width: '100%', background: 'none', border: 0, cursor: 'pointer', textAlign: 'left', padding: '26px 0', display: 'flex', gap: 22, alignItems: 'baseline' }}>
+                            <span className="serif-num" style={{ fontSize: 20, color: 'var(--saffron)', flex: 'none', width: 32, fontWeight: 700 }}>
+                              {String(i + 1).padStart(2, '0')}
+                            </span>
+                            <span style={{ flex: 1 }}>
+                              <span className="h-sub" style={{ display: 'block', marginBottom: 4 }}>{v.name}</span>
+                              <span className="small" style={{ color: 'var(--earth)', fontWeight: 600 }}>{v.tag}</span>
+                            </span>
+                            <span style={{ flex: 'none', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .3s', color: 'var(--indigo)' }}>
+                              <Icon.arrow width={19} height={19} />
+                            </span>
+                          </button>
+                          {isOpen && (
+                            <div style={{ paddingBottom: 34, paddingLeft: 54 }}>
+                              <p className="lede" style={{ maxWidth: '58ch' }}>{v.line}</p>
+                              <div className="grid g3" style={{ marginTop: 22, gap: 30 }}>
+                                <div>
+                                  <div className="overline">Right for you if</div>
+                                  <p className="small">{v.good}</p>
+                                </div>
+                                <div>
+                                  <div className="overline">How it works</div>
+                                  <ol style={{ paddingLeft: 18, margin: 0, fontSize: 13, lineHeight: 1.8 }}>
+                                    {v.how.map((h) => <li key={h} style={{ marginBottom: 5 }}>{h}</li>)}
+                                  </ol>
+                                </div>
+                                <div>
+                                  <div className="overline">The benefit</div>
+                                  <p className="small">{v.benefit}</p>
+                                  <Link to={v.key === 'complex' ? '/counsel' : '/calculators'} className="link-gold">
+                                    {v.key === 'complex' ? 'Speak to a specialist →' : 'Calculate my gift →'}
+                                  </Link>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
-              <p className="tiny muted" style={{ marginTop: 18, marginBottom: 0 }}>
-                Sample wording only. Please have your own solicitor or attorney review any bequest language
-                before you sign it.
-              </p>
-            </div>
-          </div>
+              ),
+            },
+            {
+              id: 'partners', label: 'Our partners', count: 3,
+              render: () => (
+                <div>
+                  <Head center over="Doing it is the easy part"
+                    title="We hand you to the best tool for the job"
+                    lede="The Foundation does not try to be a law firm or a brokerage. For each vehicle we hand you to a partner that does it properly — and the record comes back to us automatically." />
+                  <div className="grid g3">
+                    {(partners || []).filter((p) => ['freewill', 'donatestock', 'gofundme'].includes(p.key)).map((p) => (
+                      <article key={p.key} className="card card-lift" style={{ borderTop: '2px solid var(--saffron)' }}>
+                        <div className="overline">{p.role}</div>
+                        <h3 className="h-sub" style={{ marginBottom: 12 }}>{p.name}</h3>
+                        <p className="small muted" style={{ minHeight: 92 }}>{p.blurb}</p>
+                        <a href={p.url} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-gold">
+                          {p.action} <Icon.arrow width={14} height={14} />
+                        </a>
+                        {p.handoff && <p className="tiny muted" style={{ marginTop: 14, marginBottom: 0 }}>{p.handoff}</p>}
+                      </article>
+                    ))}
+                  </div>
+                  <div className="card" style={{ marginTop: 26, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                    <Icon.doc width={22} height={22} style={{ color: 'var(--earth)', flex: 'none', marginTop: 2 }} />
+                    <p className="small muted" style={{ marginBottom: 0 }}>
+                      Already have a will or trust? You do not need to rewrite it. Upload it to the{' '}
+                      <Link to="/vault" className="link-gold" style={{ textTransform: 'none', fontSize: 13.5 }}>document vault</Link>{' '}
+                      and the AI parsing engine will read it, confirm the Foundation is named correctly, and
+                      extract the allocation — so nothing depends on anyone re-typing it.
+                    </p>
+                  </div>
+                </div>
+              ),
+            },
+            {
+              id: 'circle', label: 'The Legacy Circle',
+              render: () => (
+                <div className="grid g2" style={{ gap: 56, alignItems: 'center' }}>
+                  <div>
+                    <div className="overline">The Sankalpa Legacy Circle</div>
+                    <h2 className="h-section">Tell us, and we can plan.</h2>
+                    <p className="lede" style={{ marginTop: 18 }}>
+                      A legacy gift you have told us about is worth far more than a secret one — not in money,
+                      but in certainty. It lets the Foundation commit to a school, a programme, a decade.
+                    </p>
+                    <p className="muted">
+                      Everyone who documents a legacy intention joins the Legacy Circle. There is no minimum.
+                      There is no obligation — a revocable gift stays revocable, always. What you receive is an
+                      annual account of exactly what your intention is already making possible, and an open door
+                      at every centre in the world.
+                    </p>
+                    <div className="row" style={{ marginTop: 24 }}>
+                      <Link to="/vault" className="btn">Document my intention</Link>
+                      <Link to="/counsel" className="btn btn-ghost">Talk to someone first</Link>
+                    </div>
+                  </div>
+                  <div className="card card-feature" style={{ padding: 34 }}>
+                    <div className="overline">What we will need, eventually</div>
+                    {[
+                      ['Legal name', 'Art of Living Foundation'],
+                      ['Tax status', '501(c)(3) public charity'],
+                      ['EIN', '95-4386417'],
+                      ['Suggested wording', '"I give ___ percent of my residuary estate to the Art of Living Foundation, a California nonprofit corporation, for its general endowment purposes."'],
+                    ].map(([l, v]) => (
+                      <div key={l} style={{ padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
+                        <div className="overline" style={{ marginBottom: 5 }}>{l}</div>
+                        <div style={{ fontSize: 14, fontStyle: l === 'Suggested wording' ? 'italic' : undefined }}>{v}</div>
+                      </div>
+                    ))}
+                    <p className="tiny muted" style={{ marginTop: 16, marginBottom: 0 }}>
+                      Sample wording only. Please have your own solicitor or attorney review any bequest
+                      language before you sign it.
+                    </p>
+                  </div>
+                </div>
+              ),
+            },
+          ]} />
         </div>
       </section>
     </>

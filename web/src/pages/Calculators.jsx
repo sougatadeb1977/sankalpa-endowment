@@ -1,15 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, money, compact, pct, num, Head, Icon, Donut, PALETTE } from '../lib.jsx';
-
-const TABS = [
-  ['legacy', 'Bequest'],
-  ['ira', 'Retirement account'],
-  ['stock', 'Appreciated stock'],
-  ['insurance', 'Life insurance'],
-  ['cga', 'Gift annuity'],
-  ['crt', 'Remainder trust'],
-];
+import { api, money, pct, num, Head, Icon, Donut, PALETTE, Tabs } from '../lib.jsx';
 
 function Result({ rows, note }) {
   return (
@@ -650,7 +641,6 @@ function CRT() {
 /* ─────────────────────────────── page ─────────────────────────────────── */
 
 export default function Calculators() {
-  const [tab, setTab] = useState('legacy');
   const [partners, setPartners] = useState(null);
   useEffect(() => { api('/partners').then(setPartners).catch(() => {}); }, []);
 
@@ -659,18 +649,16 @@ export default function Calculators() {
       <div className="wrap">
         <Head over="Gift calculators" title="Real numbers, computed on the server."
           lede="No brochure estimates. These run Social Security mortality tables, the current IRS §7520 rate and the ACGA annuity schedule — the same engine that values the Foundation's entire planned-gift pipeline." />
-        <div className="chip-row" style={{ marginBottom: 34 }} data-tour="calc">
-          {TABS.map(([id, l]) => (
-            <button key={id} className={`chip${tab === id ? ' on' : ''}`} onClick={() => setTab(id)}>{l}</button>
-          ))}
+        <div data-tour="calc">
+          <Tabs hashKey="calc" tabs={[
+            { id: 'legacy', label: 'Bequest', render: () => <Legacy /> },
+            { id: 'ira', label: 'Retirement account', render: () => <IRA partners={partners} /> },
+            { id: 'stock', label: 'Appreciated stock', render: () => <Stock partners={partners} /> },
+            { id: 'insurance', label: 'Life insurance', render: () => <Insurance partners={partners} /> },
+            { id: 'cga', label: 'Gift annuity', render: () => <CGA /> },
+            { id: 'crt', label: 'Remainder trust', render: () => <CRT /> },
+          ]} />
         </div>
-
-        {tab === 'legacy' && <Legacy />}
-        {tab === 'ira' && <IRA partners={partners} />}
-        {tab === 'stock' && <Stock partners={partners} />}
-        {tab === 'insurance' && <Insurance partners={partners} />}
-        {tab === 'cga' && <CGA />}
-        {tab === 'crt' && <CRT />}
 
         <div className="card" style={{ marginTop: 44, display: 'flex', gap: 18, alignItems: 'flex-start' }}>
           <Icon.scales width={26} height={26} style={{ color: 'var(--earth)', flex: 'none', marginTop: 3 }} />

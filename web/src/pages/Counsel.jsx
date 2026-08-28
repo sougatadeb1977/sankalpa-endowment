@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, money, num, Head, Icon, titleize, Loading } from '../lib.jsx';
+import { api, num, Head, Icon, titleize, Loading, Tabs } from '../lib.jsx';
 
 const ASSETS = [
   ['real_estate', 'Property or land'], ['business_interest', 'A business or company stake'],
@@ -159,154 +159,156 @@ export default function Counsel() {
         <div className="wrap">
           <Head over="Complex assets" title="When the gift does not fit a form."
             lede="A vineyard held in a company. Farmland across two states. Pre-public shares. These are the largest gifts we receive, and they should not be the hardest ones to make." />
-          <form onSubmit={submit} className="split">
-            <div className="card">
-              <div className="grid g2" style={{ gap: 0, columnGap: 20 }}>
-                <div className="field"><label htmlFor="n">Your name *</label>
-                  <input id="n" required value={f.fullName} onChange={set('fullName')} /></div>
-                <div className="field"><label htmlFor="e">Email *</label>
-                  <input id="e" type="email" required value={f.email} onChange={set('email')} /></div>
-                <div className="field"><label htmlFor="p">Phone</label>
-                  <input id="p" value={f.phone} onChange={set('phone')} /></div>
-                <div className="field"><label htmlFor="s">State of residence</label>
-                  <select id="s" value={f.state} onChange={set('state')}>
-                    {Object.entries(STATE_NAMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                    <option value="OTHER">Somewhere else</option>
-                  </select>
-                  <div className="hint">
-                    {network && f.state !== 'OTHER'
-                      ? `${network.coverage.find((c) => c.state === f.state)?.firms || 0} firms in the panel are licensed here.`
-                      : 'We will find you a licensed adviser wherever you are.'}
-                  </div>
-                </div>
-              </div>
 
-              <div className="field">
-                <label>What do you hold? Select all that apply.</label>
-                <div className="chip-row">
-                  {ASSETS.map(([id, l]) => (
-                    <button type="button" key={id} className={`chip chip-sm${f.assetTypes.includes(id) ? ' on' : ''}`}
-                      onClick={() => toggle(id)}>{l}</button>
+          <Tabs hashKey="counsel" tabs={[
+            {
+              id: 'enquiry', label: 'Tell us what you hold',
+              render: () => (
+                <form onSubmit={submit} className="split">
+                  <div className="card">
+                    <div className="grid g2" style={{ gap: 0, columnGap: 20 }}>
+                      <div className="field"><label htmlFor="n">Your name *</label>
+                        <input id="n" required value={f.fullName} onChange={set('fullName')} /></div>
+                      <div className="field"><label htmlFor="e">Email *</label>
+                        <input id="e" type="email" required value={f.email} onChange={set('email')} /></div>
+                      <div className="field"><label htmlFor="p">Phone</label>
+                        <input id="p" value={f.phone} onChange={set('phone')} /></div>
+                      <div className="field"><label htmlFor="s">State of residence</label>
+                        <select id="s" value={f.state} onChange={set('state')}>
+                          {Object.entries(STATE_NAMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                          <option value="OTHER">Somewhere else</option>
+                        </select>
+                        <div className="hint">
+                          {network && f.state !== 'OTHER'
+                            ? `${network.coverage.find((c) => c.state === f.state)?.firms || 0} firms in the panel are licensed here.`
+                            : 'We will find you a licensed adviser wherever you are.'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label>What do you hold? Select all that apply.</label>
+                      <div className="chip-row">
+                        {ASSETS.map(([id, l]) => (
+                          <button type="button" key={id} className={`chip chip-sm${f.assetTypes.includes(id) ? ' on' : ''}`}
+                            onClick={() => toggle(id)}>{l}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="v">Approximate value</label>
+                      <select id="v" value={f.assetValueRange} onChange={set('assetValueRange')}>
+                        {RANGES.map((r) => <option key={r}>{r}</option>)}
+                      </select>
+                      <div className="hint">A rough band is enough. We are not asking you to value anything precisely.</div>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="d">Anything you would like us to know</label>
+                      <textarea id="d" rows={5} value={f.description} onChange={set('description')}
+                        placeholder="For example: the property is jointly held, or I would like to keep an income from it during my lifetime." />
+                    </div>
+                    <div className="grid g2" style={{ gap: 0, columnGap: 20 }}>
+                      <div className="field"><label htmlFor="pc">How should we reach you?</label>
+                        <select id="pc" value={f.prefContact} onChange={set('prefContact')}>
+                          <option value="email">Email</option><option value="phone">Telephone</option>
+                          <option value="video">Video call</option>
+                        </select></div>
+                      <div className="field"><label htmlFor="bt">Best time</label>
+                        <select id="bt" value={f.bestTime} onChange={set('bestTime')}>
+                          <option value="morning">Morning</option><option value="afternoon">Afternoon</option>
+                          <option value="evening">Evening</option>
+                        </select></div>
+                    </div>
+                    {err && <p className="err">{err}</p>}
+                    <button className="btn btn-gold" disabled={busy || !f.fullName || !f.email}>
+                      {busy ? <><span className="spinner" /> Triaging your case</> : 'Send in confidence'}
+                    </button>
+                  </div>
+                  <aside>
+                    <div className="card" style={{ display: 'flex', gap: 14 }}>
+                      <Icon.shield width={22} height={22} style={{ color: 'var(--teal)', flex: 'none' }} />
+                      <p className="small muted" style={{ marginBottom: 0 }}>
+                        Held in confidence. Complex case records are visible only to the assigned officer, the
+                        assigned consultant and legal counsel — and every access is written to the audit log.
+                      </p>
+                    </div>
+                  </aside>
+                </form>
+              ),
+            },
+            {
+              id: 'how', label: 'How it works',
+              render: () => (
+                <div className="card card-feature" style={{ maxWidth: 760 }}>
+                  {[
+                    ['Within minutes', 'The platform triages your case by asset complexity and value, and matches you to the specialties it needs.'],
+                    ['Within your stated SLA', 'A consultant licensed in your state contacts you — always within the time we quote on the confirmation screen.'],
+                    ['You engage them directly', 'The consultant contracts with you and is paid by you. The Foundation never pays for advice given about a gift to itself — which is exactly why the advice can be trusted.'],
+                    ['You tell us the outcome', 'When the plan is signed, you send us the instrument and the allocation. Nothing else. We track it in the endowment pipeline from there.'],
+                  ].map(([w, t], i) => (
+                    <div key={w} style={{ padding: '18px 0', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16 }}>
+                      <span className="serif-num" style={{ color: 'var(--saffron)', fontSize: 18, flex: 'none', fontWeight: 700 }}>{i + 1}</span>
+                      <div>
+                        <div className="overline" style={{ marginBottom: 5 }}>{w}</div>
+                        <p className="small muted" style={{ marginBottom: 0 }}>{t}</p>
+                      </div>
+                    </div>
                   ))}
                 </div>
-              </div>
-
-              <div className="field">
-                <label htmlFor="v">Approximate value</label>
-                <select id="v" value={f.assetValueRange} onChange={set('assetValueRange')}>
-                  {RANGES.map((r) => <option key={r}>{r}</option>)}
-                </select>
-                <div className="hint">A rough band is enough. We are not asking you to value anything precisely.</div>
-              </div>
-
-              <div className="field">
-                <label htmlFor="d">Anything you would like us to know</label>
-                <textarea id="d" rows={5} value={f.description} onChange={set('description')}
-                  placeholder="For example: the property is jointly held, or I would like to keep an income from it during my lifetime." />
-              </div>
-
-              <div className="grid g2" style={{ gap: 0, columnGap: 20 }}>
-                <div className="field"><label htmlFor="pc">How should we reach you?</label>
-                  <select id="pc" value={f.prefContact} onChange={set('prefContact')}>
-                    <option value="email">Email</option><option value="phone">Telephone</option>
-                    <option value="video">Video call</option>
-                  </select></div>
-                <div className="field"><label htmlFor="bt">Best time</label>
-                  <select id="bt" value={f.bestTime} onChange={set('bestTime')}>
-                    <option value="morning">Morning</option><option value="afternoon">Afternoon</option>
-                    <option value="evening">Evening</option>
-                  </select></div>
-              </div>
-
-              {err && <p className="err">{err}</p>}
-              <button className="btn btn-gold" disabled={busy || !f.fullName || !f.email}>
-                {busy ? <><span className="spinner" /> Triaging your case</> : 'Send in confidence'}
-              </button>
-            </div>
-
-            <aside>
-              <div className="card card-feature">
-                <div className="overline">How this works</div>
-                {[
-                  ['Within minutes', 'The platform triages your case by asset complexity and value, and matches you to the specialties it needs.'],
-                  ['Within your stated SLA', 'A consultant licensed in your state contacts you — always within the time we quote on the confirmation screen.'],
-                  ['You engage them directly', 'The consultant contracts with you and is paid by you. The Foundation never pays for advice given about a gift to itself — which is exactly why the advice can be trusted.'],
-                  ['You tell us the outcome', 'When the plan is signed, you send us the instrument and the allocation. Nothing else. We track it in the endowment pipeline from there.'],
-                ].map(([w, t], i) => (
-                  <div key={w} style={{ padding: '16px 0', borderBottom: '1px solid var(--border)', display: 'flex', gap: 14 }}>
-                    <span className="serif-num" style={{ color: 'var(--saffron)', fontSize: 18, flex: 'none' }}>{i + 1}</span>
-                    <div>
-                      <div className="overline" style={{ marginBottom: 5 }}>{w}</div>
-                      <p className="small muted" style={{ marginBottom: 0 }}>{t}</p>
+              ),
+            },
+            {
+              id: 'network', label: 'The adviser network',
+              count: network ? network.consultants.length : undefined,
+              render: () => (!network ? <Loading /> : (
+                <div>
+                  <Head center over="The adviser network"
+                    title="No single firm is licensed in every state. So we built a panel."
+                    lede="Estate law is state law. Rather than pretend one firm can cover the country, the Foundation maintains a panel of independent firms, and the platform routes each case to one licensed where the donor actually lives." />
+                  <div className="grid g4" style={{ marginBottom: 26 }}>
+                    {[
+                      ['Priority states covered', `${network.statesCovered} of ${network.totalStates}`],
+                      ['States with more than one firm', `${network.statesWithRedundancy} of ${network.totalStates}`],
+                      ['Firms on the panel', num(network.consultants.length)],
+                      ['Cost to the Foundation', '$0'],
+                    ].map(([l, v]) => (
+                      <div className="kpi" key={l}><div className="kpi-lab">{l}</div>
+                        <div className="kpi-val num">{v}</div></div>
+                    ))}
+                  </div>
+                  <div className="card" style={{ marginBottom: 22 }}>
+                    <div className="overline">Coverage across the states where our donors live</div>
+                    <div className="table-scroll">
+                      <table className="data" style={{ minWidth: 620 }}>
+                        <thead><tr><th>State</th><th className="r">Firms licensed</th>
+                          <th className="r">Capacity</th><th>Specialties available</th></tr></thead>
+                        <tbody>
+                          {network.coverage.map((c) => (
+                            <tr key={c.state}>
+                              <td style={{ fontWeight: 600 }}>{STATE_NAMES[c.state] || c.state}</td>
+                              <td className="r">{c.firms}
+                                {!c.redundant && c.firms > 0 && (
+                                  <span className="badge b-pending" style={{ marginLeft: 8 }}>single</span>
+                                )}
+                              </td>
+                              <td className="r">{c.capacity} open cases</td>
+                              <td className="small muted">{c.specialties.map(titleize).join(', ')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-                ))}
-              </div>
-              <div className="card" style={{ marginTop: 20, display: 'flex', gap: 14 }}>
-                <Icon.shield width={22} height={22} style={{ color: 'var(--teal)', flex: 'none' }} />
-                <p className="small muted" style={{ marginBottom: 0 }}>
-                  Held in confidence. Complex case records are visible only to the assigned officer, the
-                  assigned consultant and legal counsel — and every access is written to the audit log.
-                </p>
-              </div>
-            </aside>
-          </form>
-        </div>
-      </section>
-
-      {/* ─────────────── the consultant panel ─────────────── */}
-      <section className="section section-warm">
-        <div className="wrap">
-          <Head center over="The adviser network"
-            title="No single firm is licensed in every state. So we built a panel."
-            lede="Estate law is state law. Rather than pretend one firm can cover the country, the Foundation maintains a panel of independent firms, and the platform routes each case to one licensed where the donor actually lives." />
-          {!network ? <Loading /> : (
-            <>
-              <div className="grid g4" style={{ marginBottom: 30 }}>
-                {[
-                  ['Priority states covered', `${network.statesCovered} of ${network.totalStates}`],
-                  ['States with more than one firm', `${network.statesWithRedundancy} of ${network.totalStates}`],
-                  ['Firms on the panel', num(network.consultants.length)],
-                  ['Cost to the Foundation', '$0'],
-                ].map(([l, v]) => (
-                  <div className="kpi" key={l}><div className="kpi-lab">{l}</div>
-                    <div className="kpi-val num">{v}</div></div>
-                ))}
-              </div>
-
-              <div className="card" style={{ marginBottom: 26 }}>
-                <div className="overline">Coverage across the states where our donors live</div>
-                <div className="table-scroll">
-                  <table className="data" style={{ minWidth: 620 }}>
-                    <thead><tr><th>State</th><th className="r">Firms licensed</th>
-                      <th className="r">Capacity</th><th>Specialties available</th></tr></thead>
-                    <tbody>
-                      {network.coverage.map((c) => (
-                        <tr key={c.state}>
-                          <td style={{ fontWeight: 600 }}>{STATE_NAMES[c.state] || c.state}</td>
-                          <td className="r">{c.firms}
-                            {!c.redundant && c.firms > 0 && (
-                              <span className="badge b-pending" style={{ marginLeft: 8 }}>single</span>
-                            )}
-                          </td>
-                          <td className="r">{c.capacity} open cases</td>
-                          <td className="small muted">{c.specialties.map(titleize).join(', ')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="card" style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
+                    <Icon.scales width={26} height={26} style={{ color: 'var(--earth)', flex: 'none', marginTop: 3 }} />
+                    <div>
+                      <h3 className="h-sub" style={{ marginBottom: 8 }}>Why you pay the adviser, and not us</h3>
+                      <p className="small muted" style={{ marginBottom: 0 }}>{network.model}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              <div className="card" style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
-                <Icon.scales width={26} height={26} style={{ color: 'var(--earth)', flex: 'none', marginTop: 3 }} />
-                <div>
-                  <h3 className="h-sub" style={{ marginBottom: 8 }}>Why you pay the adviser, and not us</h3>
-                  <p className="small muted" style={{ marginBottom: 0 }}>{network.model}</p>
-                </div>
-              </div>
-            </>
-          )}
+              )),
+            },
+          ]} />
         </div>
       </section>
     </>

@@ -863,3 +863,57 @@ table.ledger tr.group-row td {
   .ptop-crumb { display: none; }
   .pbody { padding: 20px 16px 70px; }
 }
+
+
+/* ═══════════════════════════════ tabs ════════════════════════════════
+   A page is chunked into panels rather than run as one long scroll. The strip
+   sticks under the nav so the reader can always change panel without scrolling
+   back up. */
+.tabstrip {
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, .95);
+  backdrop-filter: saturate(180%) blur(12px);
+  margin-bottom: 34px;
+}
+.tabstrip.sticky { position: sticky; top: 74px; z-index: 30; }
+.tabstrip-inner {
+  display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.tabstrip-inner::-webkit-scrollbar { display: none; }
+.tab {
+  background: none; border: 0; border-bottom: 2px solid transparent;
+  padding: 15px 20px 13px; cursor: pointer; white-space: nowrap;
+  font-size: 13.5px; font-weight: 500; color: var(--ink-soft);
+  transition: color .18s, border-color .18s;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.tab:hover { color: var(--indigo); }
+.tab.on { color: var(--indigo); font-weight: 700; border-bottom-color: var(--saffron); }
+.tab:focus-visible { outline: 2px solid var(--saffron); outline-offset: -2px; }
+.tab-count {
+  font-size: 10.5px; font-weight: 600; color: var(--earth);
+  background: var(--lotus-warm); padding: 2px 7px; font-variant-numeric: tabular-nums;
+}
+.tabpanel { animation: tabIn .32s ease; }
+@keyframes tabIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Panels sit inside .section already, so their own sections must not re-pad. */
+.tabpanel > .section,
+.tabpanel > .section-tight { padding-top: 0; }
+
+/* ─────────────────────────── world map ──────────────────────────────── */
+.worldmap { background: #fff; border: 1px solid var(--border); padding: 14px; }
+.worldmap svg { display: block; }
+.map-legend {
+  display: flex; gap: 20px; flex-wrap: wrap; align-items: center;
+  padding: 12px 4px 2px; font-size: 11.5px; color: var(--ink-soft);
+}
+.map-legend .dot { display: inline-block; background: var(--saffron); border-radius: 50%;
+  opacity: .82; margin-right: 6px; vertical-align: middle; }
+
+@media (max-width: 860px) {
+  .tabstrip.sticky { top: 74px; }
+  .tab { padding: 14px 15px 12px; font-size: 13px; }
+  .worldmap { padding: 8px; }
+}

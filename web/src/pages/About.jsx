@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Head, Icon, Modal, useReveal, useApi } from '../lib.jsx';
+import { Head, Icon, Modal, useApi, Tabs } from '../lib.jsx';
 
 const FILM = 'k493mHHWTfw';
 
@@ -18,7 +18,6 @@ const TIMELINE = [
 export default function About() {
   const [film, setFilm] = useState(false);
   const { data: quotes } = useApi('/quotes');
-  useReveal();
   return (
     <>
       <section style={{ position: 'relative', background: 'var(--lotus)', borderBottom: '1px solid var(--border)', overflow: 'hidden' }}>
@@ -41,7 +40,7 @@ export default function About() {
                 <Link to="/give" className="btn btn-ghost">Support the work</Link>
               </div>
             </div>
-            <div className="reveal">
+            <div>
               <button onClick={() => setFilm(true)} style={{ padding: 0, border: 0, background: 'none', cursor: 'pointer', width: '100%' }}>
                 <div style={{ position: 'relative', aspectRatio: '16/9', overflow: 'hidden', border: '1px solid var(--border-strong)' }}>
                   <img src={`https://img.youtube.com/vi/${FILM}/maxresdefault.jpg`} alt="Gurudev Sri Sri Ravi Shankar"
@@ -59,56 +58,61 @@ export default function About() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" style={{ paddingTop: 34 }}>
         <div className="wrap">
-          <div className="grid g3" style={{ gap: 44 }}>
-            {[
-              ['The practice', 'Sudarshan Kriya is a rhythmic breathing technique, studied in more than a hundred independent papers for its effect on anxiety, depression and post-traumatic stress. It is taught to anyone, in any country, regardless of belief or ability to pay.'],
-              ['The service', 'Free schools for 100,000 rural children. Trauma relief for veterans and survivors. Disaster deployment from Hurricane Katrina to the Haiti earthquake. River rejuvenation, organic farming, prison programmes, youth leadership.'],
-              ['The peace work', 'Gurudev has personally facilitated dialogue in Sri Lanka, Colombia, Iraq and Kosovo — often between people who would not otherwise be in a room together. He holds no political office and takes no side.'],
-            ].map(([h, p]) => (
-              <div key={h} className="reveal">
-                <div className="overline">{h}</div>
-                <p className="muted">{p}</p>
-              </div>
-            ))}
-          </div>
+          <Tabs hashKey="about" tabs={[
+            {
+              id: 'work', label: 'The work',
+              render: () => (
+                <div className="grid g3" style={{ gap: 44 }}>
+                  {[
+                    ['The practice', 'Sudarshan Kriya is a rhythmic breathing technique, studied in more than a hundred independent papers for its effect on anxiety, depression and post-traumatic stress. It is taught to anyone, in any country, regardless of belief or ability to pay.'],
+                    ['The service', 'Free schools for 100,000 rural children. Trauma relief for veterans and survivors. Disaster deployment from Hurricane Katrina to the Haiti earthquake. River rejuvenation, organic farming, prison programmes, youth leadership.'],
+                    ['The peace work', 'Gurudev has personally facilitated dialogue in Sri Lanka, Colombia, Iraq and Kosovo — often between people who would not otherwise be in a room together. He holds no political office and takes no side.'],
+                  ].map(([h, p]) => (
+                    <div key={h}>
+                      <div className="overline">{h}</div>
+                      <p className="muted">{p}</p>
+                    </div>
+                  ))}
+                </div>
+              ),
+            },
+            {
+              id: 'timeline', label: 'Forty-five years', count: TIMELINE.length,
+              render: () => (
+                <div style={{ maxWidth: 820 }}>
+                  <Head over="A short history of quiet work" title="Milestones" />
+                  {TIMELINE.map(([y, t]) => (
+                    <div key={y} style={{ display: 'flex', gap: 30, padding: '20px 0', borderTop: '1px solid var(--border)' }}>
+                      <div className="serif-num" style={{ fontSize: 26, color: 'var(--saffron)', fontWeight: 700, flex: 'none', width: 78, lineHeight: 1.2 }}>{y}</div>
+                      <p style={{ marginBottom: 0, fontSize: 15 }}>{t}</p>
+                    </div>
+                  ))}
+                </div>
+              ),
+            },
+            {
+              id: 'wisdom', label: 'In his own words', count: quotes ? quotes.length : undefined,
+              render: () => (
+                <div>
+                  <Head center over="Wisdom, offered freely" title="Quotations" />
+                  <div className="grid g3">
+                    {(quotes || []).map((q) => (
+                      <blockquote key={q.id} style={{ margin: 0, borderLeft: '2px solid var(--saffron)', paddingLeft: 20 }}>
+                        <p className="quote" style={{ fontSize: 17, marginBottom: 10 }}>“{q.text}”</p>
+                        <cite className="tiny" style={{ fontStyle: 'normal', color: 'var(--earth)', letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                          {q.attribution}
+                        </cite>
+                      </blockquote>
+                    ))}
+                  </div>
+                </div>
+              ),
+            },
+          ]} />
         </div>
       </section>
-
-      <section className="section section-warm">
-        <div className="wrap">
-          <Head over="Forty-five years" title="A short history of quiet work" />
-          <div style={{ maxWidth: 820 }}>
-            {TIMELINE.map(([y, t]) => (
-              <div key={y} className="reveal" style={{ display: 'flex', gap: 34, padding: '24px 0', borderTop: '1px solid var(--border)' }}>
-                <div className="serif-num" style={{ fontSize: 30, color: 'var(--saffron)', fontWeight: 600, flex: 'none', width: 88, lineHeight: 1.1 }}>{y}</div>
-                <p style={{ marginBottom: 0, fontSize: 15.5 }}>{t}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {quotes && (
-        <section className="section section-indigo">
-          <div className="wrap">
-            <Head center light over="In his own words" title="Wisdom, offered freely" />
-            <div className="grid g3">
-              {quotes.slice(0, 6).map((q) => (
-                <blockquote key={q.id} className="reveal" style={{
-                  margin: 0, borderLeft: '2px solid var(--saffron)', paddingLeft: 22,
-                }}>
-                  <p className="quote" style={{ fontSize: 19, marginBottom: 12 }}>“{q.text}”</p>
-                  <cite className="tiny" style={{ fontStyle: 'normal', color: 'var(--earth)', letterSpacing: '.14em', textTransform: 'uppercase' }}>
-                    {q.attribution}
-                  </cite>
-                </blockquote>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
 
       <section className="section" style={{ textAlign: 'center' }}>
         <div className="wrap narrow">

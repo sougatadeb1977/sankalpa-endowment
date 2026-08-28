@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  api, useApi, money, compact, num, pct, Head, Icon, Modal, useReveal, useCountUp, BarList, PALETTE,
+  useApi, compact, num, pct, Head, Icon, Modal, Tabs,
+  useCountUp, BarList, PALETTE,
 } from '../lib.jsx';
+import WorldMap from '../WorldMap.jsx';
 
 const HERO_VIDEO = 'k493mHHWTfw';
 const WISDOM = [
@@ -11,48 +13,6 @@ const WISDOM = [
   { id: 'hu41ybUC0PE', title: 'With Harvard\'s Robert Waldinger', note: 'What makes a good life' },
   { id: 'roaD-qgPuCM', title: 'The Aubrey Marcus Podcast', note: 'Breath, mind and modern life' },
 ];
-
-/* Approximate coordinates for the globe visualisation. */
-const COORD = {
-  US: [-98, 39], IN: [79, 22], DE: [10, 51], GB: [-2, 54], CA: [-106, 56], FR: [2, 47],
-  CH: [8, 47], AU: [134, -25], NL: [5, 52], SE: [18, 60], SG: [104, 1], BR: [-51, -14],
-  AE: [54, 24], IT: [12, 42], ES: [-4, 40], JP: [138, 36], ZA: [24, -29], MX: [-102, 23],
-  KE: [38, 0], NO: [8, 61],
-};
-
-function Globe({ countries }) {
-  const R = 148, cx = 170, cy = 170;
-  const project = ([lon, lat]) => {
-    const p = (lat * Math.PI) / 180, l = (lon * Math.PI) / 180;
-    return { x: cx + R * Math.cos(p) * Math.sin(l), y: cy - R * Math.sin(p), z: Math.cos(p) * Math.cos(l) };
-  };
-  const max = Math.max(...countries.map((c) => c.raised)) || 1;
-  return (
-    <svg viewBox="0 0 340 340" width="100%" style={{ maxWidth: 340 }} role="img" aria-label="Global donor reach">
-      <circle cx={cx} cy={cy} r={R} fill="rgba(212,134,11,.05)" stroke="var(--border-strong)" strokeWidth="1" />
-      {[-60, -30, 0, 30, 60].map((lat) => {
-        const p = (lat * Math.PI) / 180;
-        return <ellipse key={lat} cx={cx} cy={cy - R * Math.sin(p)} rx={R * Math.cos(p)} ry={R * Math.cos(p) * 0.22}
-          fill="none" stroke="var(--border)" strokeWidth="0.8" />;
-      })}
-      {[0, 30, 60, 90, 120, 150].map((lon) => (
-        <ellipse key={lon} cx={cx} cy={cy} rx={Math.abs(R * Math.sin((lon * Math.PI) / 180))} ry={R}
-          fill="none" stroke="var(--border)" strokeWidth="0.8" />
-      ))}
-      {countries.filter((c) => COORD[c.country]).map((c) => {
-        const p = project(COORD[c.country]);
-        const r = 3 + (c.raised / max) * 9;
-        return (
-          <g key={c.country} opacity={p.z > -0.15 ? 1 : 0.22}>
-            <circle cx={p.x} cy={p.y} r={r + 5} fill="var(--saffron)" opacity=".16" />
-            <circle cx={p.x} cy={p.y} r={r} fill="var(--saffron)" />
-            <title>{c.country}: {compact(c.raised)} from {c.donors} supporters</title>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
 
 function Meter({ c }) {
   const [v, ref] = useCountUp(c ? c.cashRaised + c.pipelineNpv : 0, 2100);
@@ -78,6 +38,195 @@ function Meter({ c }) {
   );
 }
 
+/* ─────────────────────────── panel: endowment ────────────────────────── */
+
+function WhyEndowment() {
+  return (
+    <div className="grid g2" style={{ gap: 60, alignItems: 'center' }}>
+      <div>
+        <div className="overline">Why an endowment</div>
+        <h2 className="h-section">A gift that is given once, and keeps giving for ever.</h2>
+        <p className="lede" style={{ marginTop: 20 }}>
+          Ordinary giving funds a year. An endowment funds a century. The principal is never spent —
+          only the investment return is drawn, at a disciplined 4.5% a year, so a gift made today is
+          still teaching a child to breathe in 2126.
+        </p>
+        <p className="muted">
+          That is why this campaign exists. Forty-five million dollars, raised once, ends the annual
+          anxiety of fundraising and lets programme teams plan in decades rather than quarters. It is
+          the difference between a charity that survives and a mission that endures.
+        </p>
+        <Link to="/planned-giving" className="link-gold">See the seven ways to give →</Link>
+      </div>
+      <div className="card card-feature" style={{ padding: 36 }}>
+        <div className="overline">What $100,000 becomes</div>
+        {[
+          ['Given once, today', '$100,000', 'var(--indigo)'],
+          ['Distributed each year, for ever', '$4,500', 'var(--saffron)'],
+          ['Given away over 100 years', '$450,000', 'var(--teal)'],
+          ['And the principal still stands', '$100,000', 'var(--earth)'],
+        ].map(([l, v, col]) => (
+          <div key={l} className="between" style={{ padding: '16px 0', borderBottom: '1px solid var(--border)' }}>
+            <span className="small">{l}</span>
+            <span className="serif-num" style={{ fontSize: 24, color: col, fontWeight: 700 }}>{v}</span>
+          </div>
+        ))}
+        <p className="tiny muted" style={{ marginTop: 18, marginBottom: 0 }}>
+          Illustrative, using the Foundation's 4.5% spending policy. Investment returns are not guaranteed.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────────── panel: funds ──────────────────────────── */
+
+function Funds({ funds }) {
+  return (
+    <div data-tour="funds">
+      <Head center over="Where your gift lives" title="Five causes, one intention"
+        lede="Give to the permanent endowment, or direct your gift to the work that moves you. Every restricted gift is tracked in its own net asset class — money given for children can never be spent on anything else." />
+      <div className="grid g3">
+        {funds.map((f, i) => (
+          <article key={f.fund_code} className="card card-lift"
+            style={{ borderTop: `2px solid ${PALETTE[i % PALETTE.length]}` }}>
+            <div className="overline" style={{ marginBottom: 10 }}>{f.fund_code}</div>
+            <h3 className="h-sub" style={{ marginBottom: 12 }}>{f.fund_name}</h3>
+            <p className="small muted" style={{ minHeight: 74 }}>{f.blurb}</p>
+            <div className="between" style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+              <div>
+                <div className="serif-num" style={{ fontSize: 22, color: 'var(--indigo)', fontWeight: 700 }}>
+                  {compact(f.raised)}
+                </div>
+                <div className="tiny muted">of {compact(f.target_amount)} target</div>
+              </div>
+              <Link to={`/give?fund=${f.fund_code}`} className="link-gold">Give →</Link>
+            </div>
+            <div style={{ height: 4, background: 'var(--border)', marginTop: 12 }}>
+              <div style={{
+                height: '100%', width: `${Math.min(100, (f.raised / f.target_amount) * 100)}%`,
+                background: PALETTE[i % PALETTE.length],
+              }} />
+            </div>
+            {f.impact_line && (
+              <p className="tiny muted" style={{ marginTop: 12, marginBottom: 0 }}>{f.impact_line}</p>
+            )}
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────── panel: reach ───────────────────────────── */
+
+function Reach({ countries }) {
+  const total = countries.reduce((s, c) => s + c.raised, 0);
+  return (
+    <div>
+      <Head center over="Global spread · one world family"
+        title="Peace does not belong to one country."
+        lede="Supporters give in dollars, euros, rupees, francs and rand — from Pasadena to Bengaluru, Stockholm to Nairobi, São Paulo to Singapore. Every gift, in every currency, funds the same simple proposition: a mind at peace makes a world at peace." />
+
+      <WorldMap countries={countries} height={430} />
+      <div className="map-legend">
+        <span><i className="dot" style={{ width: 8, height: 8 }} /> smaller</span>
+        <span><i className="dot" style={{ width: 16, height: 16 }} /> larger</span>
+        <span>Marker area is proportional to cash received.</span>
+        <span style={{ marginLeft: 'auto' }}>
+          {countries.length} countries · {compact(total)} received
+        </span>
+      </div>
+
+      <div className="grid g3" style={{ marginTop: 34, gap: 30 }}>
+        {[0, 1, 2].map((col) => (
+          <div key={col}>
+            {countries.slice(col * 6, col * 6 + 6).map((x) => (
+              <div key={x.country} className="between"
+                style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 13.5 }}>{x.country}</span>
+                <span className="num small" style={{ color: 'var(--earth)' }}>
+                  {compact(x.raised)} · {x.donors}
+                </span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────── panel: films ───────────────────────────── */
+
+function Films({ onPlay }) {
+  return (
+    <div>
+      <Head center over="In his own words" title="Gurudev, unedited"
+        lede="Four decades of teaching, offered freely. Watch, then decide what your legacy should say." />
+      <div className="grid g4">
+        {WISDOM.map((v) => (
+          <button key={v.id} className="card card-lift" onClick={() => onPlay(v)}
+            style={{ textAlign: 'left', cursor: 'pointer', padding: 0, border: '1px solid var(--border)', background: '#fff' }}>
+            <div style={{ position: 'relative', aspectRatio: '16/9', overflow: 'hidden', background: 'var(--lotus-warm)' }}>
+              <img src={`https://img.youtube.com/vi/${v.id}/hqdefault.jpg`} alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+              <span style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
+                <span style={{
+                  width: 50, height: 50, borderRadius: '50%', background: 'rgba(192,125,18,.94)',
+                  display: 'grid', placeItems: 'center', color: '#fff', paddingLeft: 4,
+                }}><Icon.play width={19} height={19} /></span>
+              </span>
+            </div>
+            <div style={{ padding: '16px 18px 20px' }}>
+              <div className="overline" style={{ marginBottom: 8 }}>{v.note}</div>
+              <div style={{ fontFamily: 'var(--serif)', fontSize: 17, fontWeight: 700, color: 'var(--indigo)', lineHeight: 1.3 }}>
+                {v.title}
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────── panel: transparency ─────────────────────────── */
+
+function Transparency({ funds, impact }) {
+  return (
+    <div>
+      <Head center over="Transparency" title="The campaign, in the open"
+        lede="These figures come straight from the platform's general ledger — the same numbers the finance team and the auditors see." />
+      <div className="grid g2" style={{ gap: 44 }}>
+        <div className="card">
+          <div className="overline">Raised by fund</div>
+          <BarList items={funds.map((f, i) => ({
+            label: f.fund_name, value: f.raised, color: PALETTE[i % PALETTE.length],
+          }))} />
+        </div>
+        <div className="card">
+          <div className="overline">How supporters give</div>
+          <BarList items={(impact.byMethod || []).slice(0, 9).map((m, i) => ({
+            label: m.payment_method.replace(/_/g, ' ').replace(/\b\w/g, (x) => x.toUpperCase()),
+            value: m.v, note: `${m.n} gifts`, color: PALETTE[i % PALETTE.length],
+          }))} />
+        </div>
+      </div>
+      <div className="card" style={{ marginTop: 22, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        <Icon.shield width={22} height={22} style={{ color: 'var(--teal)', flex: 'none', marginTop: 2 }} />
+        <p className="small muted" style={{ marginBottom: 0 }}>
+          Every gift writes a balanced double-entry journal entry the moment it is received — debits
+          equal credits, always, or the gift is refused. The finance portal is open to look at, and the
+          books balance to the cent.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────────── the page ──────────────────────────────── */
+
 export default function Home() {
   const { data: c } = useApi('/campaign');
   const { data: quotes } = useApi('/quotes');
@@ -85,7 +234,6 @@ export default function Home() {
   const [qi, setQi] = useState(0);
   const [video, setVideo] = useState(null);
   const [heroOn, setHeroOn] = useState(true);
-  useReveal(c);
 
   useEffect(() => {
     if (!quotes?.length) return;
@@ -97,6 +245,14 @@ export default function Home() {
   const funds = impact?.byFund || [];
   const countries = useMemo(
     () => (impact?.byCountry || []).filter((x) => x.raised > 0), [impact]);
+
+  const tabs = [
+    { id: 'endowment', label: 'Why an endowment', render: () => <WhyEndowment /> },
+    { id: 'funds', label: 'Where your gift lives', count: funds.length, render: () => <Funds funds={funds} /> },
+    { id: 'reach', label: 'Global reach', count: countries.length, render: () => <Reach countries={countries} /> },
+    { id: 'films', label: 'In his own words', render: () => <Films onPlay={setVideo} /> },
+    { id: 'transparency', label: 'Transparency', render: () => <Transparency funds={funds} impact={impact} /> },
+  ];
 
   return (
     <>
@@ -113,19 +269,19 @@ export default function Home() {
         <div className="hero-scrim" />
         <div className="wrap hero-body">
           <div className="hero-col">
-          <div className="hero-eyebrow">Sri Sri Gurudev Ravishankar Foundation</div>
-          <h1 className="display">Your legacy.<br />His mission.<br />Our world.</h1>
-          {q && (
-            <blockquote className="hero-quote fade-q" key={q.id}>
-              “{q.text}”
-              <cite>{q.attribution}</cite>
-            </blockquote>
-          )}
-          <div className="hero-actions">
-            <Link to="/give" className="btn btn-gold">Give now <Icon.arrow width={16} height={16} /></Link>
-            <Link to="/planned-giving" className="btn btn-ghost">Explore legacy giving</Link>
-          </div>
-          <Meter c={c} />
+            <div className="hero-eyebrow">Sri Sri Gurudev Ravishankar Foundation</div>
+            <h1 className="display">Your legacy.<br />His mission.<br />Our world.</h1>
+            {q && (
+              <blockquote className="hero-quote fade-q" key={q.id}>
+                “{q.text}”
+                <cite>{q.attribution}</cite>
+              </blockquote>
+            )}
+            <div className="hero-actions">
+              <Link to="/give" className="btn btn-gold">Give now <Icon.arrow width={16} height={16} /></Link>
+              <Link to="/planned-giving" className="btn btn-ghost">Explore legacy giving</Link>
+            </div>
+            <Meter c={c} />
           </div>
         </div>
         <div className="hero-controls">
@@ -148,7 +304,7 @@ export default function Home() {
               ['10,000', 'Centres worldwide'],
               ['800M', 'Lives touched'],
             ].map(([v, l]) => (
-              <div className="stat reveal" key={l}>
+              <div className="stat" key={l}>
                 <div className="stat-val num">{v}</div>
                 <div className="stat-lab">{l}</div>
               </div>
@@ -157,187 +313,26 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─────────────────────── why an endowment ─────────────────── */}
-      <section className="section section-warm">
+      {/* ────────────────────── tabbed content ────────────────────── */}
+      <section className="section" style={{ paddingTop: 0 }}>
         <div className="wrap">
-          <div className="grid g2" style={{ gap: 68, alignItems: 'center' }}>
-            <div className="reveal">
-              <div className="overline">Why an endowment</div>
-              <h2 className="h-section">A gift that is given once, and keeps giving for ever.</h2>
-              <p className="lede" style={{ marginTop: 22 }}>
-                Ordinary giving funds a year. An endowment funds a century. The principal is never spent —
-                only the investment return is drawn, at a disciplined 4.5% a year, so a gift made today is
-                still teaching a child to breathe in 2126.
-              </p>
-              <p className="muted">
-                That is why this campaign exists. Forty-five million dollars, raised once, ends the annual
-                anxiety of fundraising and lets programme teams plan in decades rather than quarters.
-                It is the difference between a charity that survives and a mission that endures.
-              </p>
-              <Link to="/planned-giving" className="link-gold">See the seven ways to give →</Link>
-            </div>
-            <div className="reveal">
-              <div className="card card-feature" style={{ padding: 40 }}>
-                <div className="overline">What $100,000 becomes</div>
-                {[
-                  ['Given once, today', '$100,000', 'var(--indigo)'],
-                  ['Distributed each year, for ever', '$4,500', 'var(--saffron)'],
-                  ['Given away over 100 years', '$450,000', 'var(--teal)'],
-                  ['And the principal still stands', '$100,000', 'var(--earth)'],
-                ].map(([l, v, col]) => (
-                  <div key={l} className="between" style={{ padding: '17px 0', borderBottom: '1px solid var(--border)' }}>
-                    <span className="small">{l}</span>
-                    <span className="serif-num" style={{ fontSize: 25, color: col, fontWeight: 600 }}>{v}</span>
-                  </div>
-                ))}
-                <p className="tiny muted" style={{ marginTop: 20, marginBottom: 0 }}>
-                  Illustrative, using the Foundation's 4.5% spending policy. Investment returns are not guaranteed.
-                </p>
-              </div>
-            </div>
-          </div>
+          {impact ? <Tabs tabs={tabs} hashKey="home" />
+            : <p className="muted small" style={{ padding: '40px 0' }}>Loading…</p>}
         </div>
       </section>
-
-      {/* ────────────────────────── the funds ─────────────────────── */}
-      <section className="section" data-tour="funds">
-        <div className="wrap">
-          <Head center over="Where your gift lives"
-            title="Five causes, one intention"
-            lede="Give to the permanent endowment, or direct your gift to the work that moves you. Every restricted gift is tracked in its own net asset class — money given for children can never be spent on anything else." />
-          <div className="grid g3">
-            {funds.map((f, i) => (
-              <article key={f.fund_code} className="card card-lift reveal"
-                style={{ borderTop: `3px solid ${PALETTE[i % PALETTE.length]}` }}>
-                <div className="overline" style={{ marginBottom: 10 }}>{f.fund_code}</div>
-                <h3 className="h-sub" style={{ marginBottom: 12 }}>{f.fund_name}</h3>
-                <p className="small muted" style={{ minHeight: 78 }}>{f.blurb}</p>
-                <div className="between" style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                  <div>
-                    <div className="serif-num" style={{ fontSize: 24, color: 'var(--indigo)', fontWeight: 600 }}>
-                      {compact(f.raised)}
-                    </div>
-                    <div className="tiny muted">of {compact(f.target_amount)} target</div>
-                  </div>
-                  <Link to={`/give?fund=${f.fund_code}`} className="link-gold">Give →</Link>
-                </div>
-                <div style={{ height: 4, background: 'var(--border)', marginTop: 14 }}>
-                  <div style={{
-                    height: '100%', width: `${Math.min(100, (f.raised / f.target_amount) * 100)}%`,
-                    background: PALETTE[i % PALETTE.length],
-                  }} />
-                </div>
-                {f.impact_line && (
-                  <p className="tiny muted" style={{ marginTop: 14, marginBottom: 0 }}>{f.impact_line}</p>
-                )}
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ────────────────────── global reach ──────────────────────── */}
-      <section className="section section-indigo">
-        <div className="wrap">
-          <div className="grid g2" style={{ gap: 68, alignItems: 'center' }}>
-            <div className="reveal">
-              <div className="overline">Global spread · one world family</div>
-              <h2 className="h-section">Peace does not belong to one country.</h2>
-              <p className="lede" style={{ marginTop: 20 }}>
-                Supporters give in dollars, euros, rupees, francs and rand — from Pasadena to Bengaluru,
-                Stockholm to Nairobi, São Paulo to Singapore. Every gift, in every currency, funds the same
-                simple proposition: a mind at peace makes a world at peace.
-              </p>
-              <div style={{ marginTop: 32 }}>
-                {countries.slice(0, 6).map((x) => (
-                  <div key={x.country} className="between"
-                    style={{ padding: '11px 0', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ fontSize: 14 }}>{x.country}</span>
-                    <span className="num small" style={{ color: 'var(--earth)' }}>
-                      {compact(x.raised)} · {x.donors} supporters
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="reveal" style={{ display: 'grid', placeItems: 'center' }}>
-              <Globe countries={countries} />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ──────────────────────── wisdom films ────────────────────── */}
-      <section className="section">
-        <div className="wrap">
-          <Head over="In his own words" title="Gurudev, unedited"
-            lede="Four decades of teaching, offered freely. Watch, then decide what your legacy should say." />
-          <div className="grid g4">
-            {WISDOM.map((v) => (
-              <button key={v.id} className="card card-lift reveal"
-                onClick={() => setVideo(v)}
-                style={{ textAlign: 'left', cursor: 'pointer', padding: 0, border: '1px solid var(--border)', background: '#fff' }}>
-                <div style={{ position: 'relative', aspectRatio: '16/9', overflow: 'hidden', background: 'var(--indigo)' }}>
-                  <img src={`https://img.youtube.com/vi/${v.id}/hqdefault.jpg`} alt=""
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: .88 }} loading="lazy" />
-                  <span style={{
-                    position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
-                  }}>
-                    <span style={{
-                      width: 52, height: 52, borderRadius: '50%', background: 'rgba(212,134,11,.94)',
-                      display: 'grid', placeItems: 'center', color: '#fff', paddingLeft: 4,
-                    }}><Icon.play width={20} height={20} /></span>
-                  </span>
-                </div>
-                <div style={{ padding: '18px 20px 22px' }}>
-                  <div className="overline" style={{ marginBottom: 8 }}>{v.note}</div>
-                  <div style={{ fontFamily: 'var(--serif)', fontSize: 19, color: 'var(--indigo)', lineHeight: 1.25 }}>
-                    {v.title}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ───────────────────── giving momentum ────────────────────── */}
-      {impact && (
-        <section className="section section-warm">
-          <div className="wrap">
-            <Head over="Transparency" title="The campaign, in the open"
-              lede="These figures come straight from the platform's general ledger — the same numbers the finance team and the auditors see." />
-            <div className="grid g2" style={{ gap: 52 }}>
-              <div className="card reveal">
-                <div className="overline">Raised by fund</div>
-                <BarList items={funds.map((f, i) => ({
-                  label: f.fund_name, value: f.raised, color: PALETTE[i % PALETTE.length],
-                }))} />
-              </div>
-              <div className="card reveal">
-                <div className="overline">How supporters give</div>
-                <BarList items={(impact.byMethod || []).slice(0, 8).map((m, i) => ({
-                  label: m.payment_method.replace(/_/g, ' ').replace(/\b\w/g, (x) => x.toUpperCase()),
-                  value: m.v, note: `${m.n} gifts`, color: PALETTE[i % PALETTE.length],
-                }))} />
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* ──────────────────────── closing CTA ─────────────────────── */}
-      <section className="section section-indigo" style={{ textAlign: 'center' }}>
+      <section className="section-tight section-indigo" style={{ textAlign: 'center' }}>
         <div className="wrap narrow">
           <div className="overline center" style={{ justifyContent: 'center' }}>Make your sankalpa</div>
-          <h2 className="h-section" style={{ marginBottom: 24 }}>
+          <h2 className="h-section" style={{ marginBottom: 20 }}>
             A sankalpa is an intention you make to yourself.
           </h2>
           <p className="lede">
-            Give fifty dollars today, or name the Foundation in your will and give nothing at all until you
-            no longer need it. Both are received with the same reverence. Both outlive you.
+            Give fifty dollars today, or name the Foundation in your will and give nothing at all until
+            you no longer need it. Both are received with the same reverence. Both outlive you.
           </p>
-          <div className="row" style={{ justifyContent: 'center', marginTop: 36 }}>
+          <div className="row" style={{ justifyContent: 'center', marginTop: 30 }}>
             <Link to="/give" className="btn btn-gold">Give today</Link>
             <Link to="/calculators" className="btn btn-ghost">See what a legacy gift would do</Link>
           </div>
@@ -351,7 +346,7 @@ export default function Home() {
               src={`https://www.youtube.com/embed/${video.id}?autoplay=1&rel=0&modestbranding=1`}
               allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowFullScreen />
           </div>
-          <div style={{ padding: '22px 26px' }}>
+          <div style={{ padding: '20px 24px' }}>
             <div className="overline">{video.note}</div>
             <h3 className="h-sub">{video.title}</h3>
           </div>
