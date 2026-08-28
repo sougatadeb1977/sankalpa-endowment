@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   useApi, compact, num, pct, Head, Icon, Modal, Tabs,
   useCountUp, BarList, PALETTE,
 } from '../lib.jsx';
-import WorldMap from '../WorldMap.jsx';
+// Leaflet is ~180KB, and most visitors never open the map. Load it only when
+// the Global reach panel is actually shown.
+const WorldMap = lazy(() => import('../WorldMap.jsx'));
 
 const HERO_VIDEO = 'k493mHHWTfw';
 const WISDOM = [
@@ -128,11 +130,17 @@ function Reach({ countries }) {
         title="Peace does not belong to one country."
         lede="Supporters give in dollars, euros, rupees, francs and rand — from Pasadena to Bengaluru, Stockholm to Nairobi, São Paulo to Singapore. Every gift, in every currency, funds the same simple proposition: a mind at peace makes a world at peace." />
 
-      <WorldMap countries={countries} height={430} />
+      <Suspense fallback={
+        <div className="worldmap" style={{ height: 460, display: 'grid', placeItems: 'center' }}>
+          <span className="muted small"><span className="spinner" /> Loading the map…</span>
+        </div>
+      }>
+        <WorldMap countries={countries} height={460} />
+      </Suspense>
       <div className="map-legend">
-        <span><i className="dot" style={{ width: 8, height: 8 }} /> smaller</span>
-        <span><i className="dot" style={{ width: 16, height: 16 }} /> larger</span>
-        <span>Marker area is proportional to cash received.</span>
+        <span><i className="dot" style={{ width: 9, height: 9 }} /> smaller</span>
+        <span><i className="dot" style={{ width: 17, height: 17 }} /> larger</span>
+        <span>Marker area is proportional to cash received. Click any country for detail.</span>
         <span style={{ marginLeft: 'auto' }}>
           {countries.length} countries · {compact(total)} received
         </span>
