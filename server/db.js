@@ -301,6 +301,23 @@ CREATE TABLE IF NOT EXISTS case_documents (
 `);
 
 
+/**
+ * Additive migrations. CREATE TABLE IF NOT EXISTS never adds a column to a
+ * table that already exists, so a schema that gains a field would silently
+ * diverge between a fresh database and a deployed one. This adds any missing
+ * column in place; it is a no-op once applied.
+ */
+function ensureColumn(table, column, decl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (cols.some((c) => c.name === column)) return false;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+  return true;
+}
+
+// Expected receipt term for instruments that transfer on a schedule rather
+// than at death - a pledged stock transfer, a fixed-term remainder trust.
+ensureColumn('planned_gifts', 'fixed_term_years', 'REAL');
+
 /** Append-only audit trail (SRS 6.11 - never updated, never deleted). */
 function audit(entry) {
   db.prepare(`INSERT INTO audit_log
@@ -359,4 +376,7 @@ const cfg = (key, fallback) => {
   return row ? row.value : fallback;
 };
 
-module.exports = { db, uuid, now, audit, logInteraction, postJournalEntry, cfg, DB_PATH, DATA_DIR };
+module.exports = {
+  db, uuid, now, audit, logInteraction, postJournalEntry, cfg,
+  ensureColumn, DB_PATH, DATA_DIR,
+};

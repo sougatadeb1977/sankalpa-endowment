@@ -21,10 +21,28 @@ const between = (lo, hi) => lo + rnd() * (hi - lo);
 const iint = (lo, hi) => Math.floor(between(lo, hi + 1));
 const dateStr = (d) => d.toISOString().slice(0, 10);
 
+/**
+ * Bump this whenever the shape or scale of the demo dataset changes. The app
+ * compares it against the version stored in the database at boot and rebuilds
+ * when they differ, so a deploy that changes the seed updates the data by
+ * itself. That replaces the SANKALPA_RESEED app setting, which had to be
+ * armed by hand before a deploy and disarmed afterwards - and which wiped the
+ * database on every restart if anyone forgot the second step.
+ */
+const SEED_VERSION = 6;
+
 function seed() {
   const existing = db.prepare('SELECT COUNT(*) n FROM donors').get().n;
-  if (existing > 0 && process.env.SANKALPA_RESEED !== '1') {
-    return { skipped: true, donors: existing };
+  const stored = db.prepare("SELECT value FROM system_config WHERE key = 'seed_version'").get();
+  const current = stored ? Number(stored.value) : 0;
+  const forced = process.env.SANKALPA_RESEED === '1';
+
+  if (existing > 0 && current === SEED_VERSION && !forced) {
+    return { skipped: true, donors: existing, seedVersion: current };
+  }
+  if (existing > 0) {
+    console.log(`[sankalpa] rebuilding demo data: seed v${current} -> v${SEED_VERSION}` +
+      (forced ? ' (forced)' : ''));
   }
   // Building the database posts thousands of journal entries, each of which is
   // its own transaction. At synchronous=NORMAL that is thousands of fsyncs and
@@ -41,7 +59,7 @@ function seed() {
 }
 
 function buildSeed() {
-  if (process.env.SANKALPA_RESEED === '1') {
+  {
     // Foreign keys are enforced in normal operation, so a straight table-by-table
     // teardown would abort on the first parent row that still has children. Drop
     // enforcement for the duration of the wipe and run it as one transaction, so
@@ -71,6 +89,11 @@ function buildSeed() {
   cfgIns.run('campaign_name', 'Sankalpa Endowment Campaign', '2026-01-01');
   cfgIns.run('foundation_ein', '95-4386417', '2026-01-01');
   cfgIns.run('spending_policy_rate', '0.045', '2026-01-01');
+  // NB: seed_version is deliberately NOT written here. It is written at the very
+  // end of buildSeed(), so a build interrupted half-way (a container start
+  // timeout, a crash) is retried on the next boot rather than being mistaken
+  // for a finished one - which previously left a partially populated database.
+
 
   // ─────────── SSA period life table (anchored interpolation) ─────────
   // Anchors drawn from the SSA Period Life Table shape; production systems
@@ -488,7 +511,7 @@ function buildSeed() {
           crt_trustee_name: pick(['Northern Trust', 'Bessemer Trust', 'UBS Trustees', 'Fiduciary Trust']),
           crt_asset_value: av, crt_payout_rate: round4(between(0.05, 0.08)),
           crt_type: rnd() < 0.65 ? 'CRUT' : 'CRAT',
-          crt_term_years: rnd() < 0.5 ? iint(3, 15) : null,
+          crt_term_years: rnd() < 0.65 ? iint(2, 11) : null,
         });
         face = av;
         break;
@@ -863,6 +886,17 @@ function buildSeed() {
   PRICES.forEach(([t, n, px]) => spIns.run(t, n, px, round2(px * between(0.988, 1.012)),
     new Date().toISOString(), 'seed-mark'));
 
+  // A pledged stock transfer settles when the donor gets round to instructing
+  // their broker - anywhere from a few months to about three years. Pinning
+  // every one at exactly a year left the 1-5 year horizon empty, which is an
+  // artefact of the model rather than anything real.
+  const ftUpd = db.prepare('UPDATE planned_gifts SET fixed_term_years = ? WHERE id = ?');
+  db.prepare("SELECT id FROM planned_gifts WHERE gift_type='securities'").all()
+    .forEach((g) => ftUpd.run(round2(between(0.4, 3.2)), g.id));
+  // Fixed-term remainder trusts carry their own stated term.
+  db.prepare("SELECT id, crt_term_years FROM planned_gifts WHERE gift_type='crt' AND crt_term_years IS NOT NULL").all()
+    .forEach((g) => ftUpd.run(g.crt_term_years, g.id));
+
   // Re-mark each pledged securities gift at the seeded price so the booked
   // value and the live valuation are consistent from the first page load.
   const secGifts = db.prepare("SELECT id, sec_ticker, sec_shares_pledged FROM planned_gifts WHERE gift_type='securities'").all();
@@ -963,8 +997,11 @@ function buildSeed() {
     .forEach((d) => iIns.run(uuid(), d.donor_id, d.created_at, 'web', 'document_upload',
       'Estate document uploaded to the vault', 'Routed to the AI parsing pipeline.', 'auto'));
 
+  // Only now is the build complete and safe to mark as such.
+  cfgIns.run('seed_version', String(SEED_VERSION), new Date().toISOString().slice(0, 10));
+
   return {
-    skipped: false,
+    skipped: false, seedVersion: SEED_VERSION,
     donors: donors.length, transactions: txCount,
     consultants: CONSULTANTS.length,
     operatingEntries: opEntries,
@@ -980,7 +1017,7 @@ function buildSeed() {
 const round2 = (n) => Math.round(n * 100) / 100;
 const round4 = (n) => Math.round(n * 10000) / 10000;
 
-module.exports = { seed };
+module.exports = { seed, SEED_VERSION };
 
 if (require.main === module) {
   const t0 = Date.now();

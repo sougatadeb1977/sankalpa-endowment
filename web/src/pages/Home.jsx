@@ -112,6 +112,7 @@ export default function Home() {
         </div>
         <div className="hero-scrim" />
         <div className="wrap hero-body">
+          <div className="hero-col">
           <div className="hero-eyebrow">Sri Sri Gurudev Ravishankar Foundation</div>
           <h1 className="display">Your legacy.<br />His mission.<br />Our world.</h1>
           {q && (
@@ -125,10 +126,16 @@ export default function Home() {
             <Link to="/planned-giving" className="btn btn-ghost">Explore legacy giving</Link>
           </div>
           <Meter c={c} />
+          </div>
         </div>
-        <button className="video-toggle" onClick={() => setHeroOn(!heroOn)}>
-          {heroOn ? 'Pause background film' : 'Play background film'}
-        </button>
+        <div className="hero-controls">
+          <button className="video-toggle" onClick={() => setVideo(WISDOM[0])}>
+            <Icon.play width={13} height={13} /> Watch with sound
+          </button>
+          <button className="video-toggle" onClick={() => setHeroOn(!heroOn)}>
+            {heroOn ? 'Pause film' : 'Play film'}
+          </button>
+        </div>
       </header>
 
       {/* ───────────────────────── statistics ─────────────────────── */}

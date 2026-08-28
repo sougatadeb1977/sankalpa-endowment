@@ -247,7 +247,7 @@ function portfolioForecast() {
     const opts = {
       giftType: g.gift_type, faceValue: face, age,
       gender: g.gender || 'Female', health: g.health_status || 'Average',
-      fixedTermYears: g.crt_term_years || null,
+      fixedTermYears: g.fixed_term_years || g.crt_term_years || null,
     };
     const s = giftScenarios(opts);
     totals.base += s.base.npv; totals.optimistic += s.optimistic.npv;
@@ -287,7 +287,7 @@ function recalculateAllNpv() {
     SELECT pg.id, pg.gift_type, pg.donor_id, d.date_of_birth, d.gender, d.health_status,
            pg.li_face_value, pg.ira_account_value, pg.ira_aolf_percentage, pg.sec_market_value,
            pg.bequest_amount, pg.re_appraised_value, pg.crt_asset_value, pg.cga_original_gift,
-           pg.li_aolf_percentage, pg.crt_term_years
+           pg.li_aolf_percentage, pg.crt_term_years, pg.fixed_term_years
     FROM planned_gifts pg JOIN donors d ON d.id = pg.donor_id`).all();
   const upd = db.prepare(`UPDATE planned_gifts SET npv=?, npv_optimistic=?, npv_pessimistic=?,
      projected_value=?, npv_discount_rate=?, expected_maturity_age=?, expected_receipt_year=?,
@@ -299,7 +299,7 @@ function recalculateAllNpv() {
       const s = giftScenarios({
         giftType: g.gift_type, faceValue: face, age,
         gender: g.gender || 'Female', health: g.health_status || 'Average',
-        fixedTermYears: g.crt_term_years || null,
+        fixedTermYears: g.fixed_term_years || g.crt_term_years || null,
       });
       upd.run(s.base.npv, s.optimistic.npv, s.pessimistic.npv, s.base.projectedValue,
         s.base.discountRate, s.base.expectedMaturityAge, s.base.expectedReceiptYear,

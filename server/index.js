@@ -16,7 +16,8 @@ const ai = require('./ai');
 const partners = require('./partners');
 const stewardship = require('./stewardship');
 const datahub = require('./datahub');
-const { seed } = require('./seed');
+const { SEED_VERSION } = require('./seed');
+const { fork } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -31,6 +32,9 @@ app.use((req, res, nextFn) => {
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
   nextFn();
 });
+
+/** Startup state. Data endpoints answer 503 until the database is built. */
+const warming = { ready: false, error: null, startedAt: Date.now() };
 
 const one = (sql, ...p) => db.prepare(sql).get(...p);
 const all = (sql, ...p) => db.prepare(sql).all(...p);
@@ -76,12 +80,40 @@ function requireRole(...roles) {
 
 // ═══════════════════════════ public content ═══════════════════════════
 
-app.get('/api/health', (req, res) => res.json({
-  status: 'ok', service: 'sankalpa', time: now(),
-  database: 'connected', ai: ai.providerName(),
-  donors: one('SELECT COUNT(*) n FROM donors').n,
-  transactions: one('SELECT COUNT(*) n FROM transactions').n,
-}));
+// Health is always answerable; everything else waits for a complete database.
+app.use('/api', (req, res, nextFn) => {
+  if (warming.ready || req.path === '/health') return nextFn();
+  res.status(503).json({
+    error: 'The platform is preparing its database. This takes a minute or two on first start.',
+    warming: true, elapsedSeconds: Math.round((Date.now() - warming.startedAt) / 1000),
+  });
+});
+
+app.get('/api/health', (req, res) => {
+  // While the seed worker holds its write transaction a read here would block
+  // on SQLite's busy handler - and an unanswered health probe is exactly what
+  // gets a container killed. So report status without touching the database
+  // until the build is done.
+  if (!warming.ready) {
+    return res.json({
+      status: 'warming', service: 'sankalpa', time: now(),
+      database: 'building', warmingError: warming.error,
+      elapsedSeconds: Math.round((Date.now() - warming.startedAt) / 1000),
+      ai: ai.providerName(),
+    });
+  }
+  res.json({
+    status: 'ok', service: 'sankalpa', time: now(),
+    database: 'connected', warmingError: warming.error, ai: ai.providerName(),
+    donors: one('SELECT COUNT(*) n FROM donors').n,
+    transactions: one('SELECT COUNT(*) n FROM transactions').n,
+    journalEntries: one('SELECT COUNT(*) n FROM journal_entries').n,
+    seedVersion: cfg('seed_version', '0'),
+    // Operational tell: if this is ever true in a deployed environment the
+    // database is being rebuilt on every restart, which is never intended.
+    forcedReseed: process.env.SANKALPA_RESEED === '1',
+  });
+});
 
 app.get('/api/campaign', (req, res) => {
   const cash = one("SELECT COALESCE(SUM(amount),0) v, COUNT(*) n FROM transactions WHERE status='completed'");
@@ -1007,21 +1039,63 @@ app.get('/api/*', (req, res) => res.status(404).json({ error: 'Unknown endpoint'
 app.get('*', (req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
 
 // ═══════════════════════════ boot ═════════════════════════════════════
-try {
-  const r = seed();
-  console.log('[sankalpa] seed:', JSON.stringify(r));
-} catch (e) {
-  console.error('[sankalpa] seed failed:', e.message);
-}
-try {
-  const st = stewardship.runEngine();
-  console.log('[sankalpa] stewardship:', JSON.stringify(st));
-} catch (e) {
-  console.error('[sankalpa] stewardship engine failed:', e.message);
-}
-// Re-evaluate stewardship rules every six hours (production runs this as a cron job).
-setInterval(() => { try { stewardship.runEngine(); } catch { /* non-fatal */ } }, 6 * 3600e3).unref();
+//
+// The listener starts FIRST. Building the demo database takes a couple of
+// minutes on a small instance, and App Service kills a container that has not
+// answered an HTTP request within its start timeout - which used to kill the
+// seed half-way through. Serving 503 while warming is far better than being
+// restarted mid-build.
 
 app.listen(PORT, () => {
   console.log(`[sankalpa] listening on ${PORT} | AI: ${ai.providerName()} | DB: ${require('./db').DB_PATH}`);
+  setImmediate(warmUp);
 });
+
+function warmUp() {
+  // A database that is already current needs no work, and the check is cheap.
+  if (seedIsCurrent()) {
+    console.log('[sankalpa] seed: current, nothing to build');
+    return finishWarmUp();
+  }
+
+  // Otherwise fork a worker. Seeding is ~2 minutes of synchronous SQLite
+  // writes; doing it in-process would block the event loop, leave the health
+  // probe unanswered, and get the container killed mid-build.
+  console.log('[sankalpa] seed: building demo database in a worker…');
+  const worker = fork(path.join(__dirname, 'seed-worker.js'), [], { stdio: 'inherit' });
+
+  worker.on('message', (m) => {
+    if (m?.ok) console.log('[sankalpa] seed:', JSON.stringify(m.result));
+    else { warming.error = m?.error || 'seed failed'; console.error('[sankalpa] seed failed:', warming.error); }
+  });
+  worker.on('exit', (code) => {
+    if (code !== 0 && !warming.error) warming.error = `seed worker exited with code ${code}`;
+    finishWarmUp();
+  });
+  worker.on('error', (e) => {
+    warming.error = e.message;
+    console.error('[sankalpa] seed worker error:', e.message);
+    finishWarmUp();
+  });
+}
+
+/** Does the database already hold the dataset this build expects? */
+function seedIsCurrent() {
+  try {
+    const donors = one('SELECT COUNT(*) n FROM donors').n;
+    return donors > 0 && cfg('seed_version', '0') === String(SEED_VERSION);
+  } catch { return false; }
+}
+
+function finishWarmUp() {
+  try {
+    const st = stewardship.runEngine();
+    console.log('[sankalpa] stewardship:', JSON.stringify(st));
+  } catch (e) {
+    console.error('[sankalpa] stewardship engine failed:', e.message);
+  }
+  warming.ready = true;
+  console.log('[sankalpa] ready');
+  // Re-evaluate stewardship rules every six hours (a cron job in production).
+  setInterval(() => { try { stewardship.runEngine(); } catch { /* non-fatal */ } }, 6 * 3600e3).unref();
+}
