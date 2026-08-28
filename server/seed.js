@@ -27,12 +27,25 @@ function seed() {
     return { skipped: true, donors: existing };
   }
   if (process.env.SANKALPA_RESEED === '1') {
-    for (const t of ['journal_lines', 'journal_entries', 'transactions', 'planned_gifts',
-      'pledges', 'documents', 'complex_cases', 'consultants', 'donors', 'users',
-      'accounts', 'funds', 'investments', 'fixed_assets', 'endowment_history',
-      'quotes', 'mortality_table', 'system_config', 'ai_interactions', 'audit_log',
-      'interactions', 'stewardship_tasks', 'security_prices', 'policy_premiums', 'case_documents']) {
-      db.exec(`DELETE FROM ${t}`);
+    // Foreign keys are enforced in normal operation, so a straight table-by-table
+    // teardown would abort on the first parent row that still has children. Drop
+    // enforcement for the duration of the wipe and run it as one transaction, so
+    // the rebuild is all-or-nothing rather than half-deleted.
+    db.pragma('foreign_keys = OFF');
+    try {
+      const wipe = db.transaction(() => {
+        for (const t of ['case_documents', 'policy_premiums', 'stewardship_tasks', 'interactions',
+          'journal_lines', 'journal_entries', 'transactions', 'planned_gifts',
+          'pledges', 'documents', 'complex_cases', 'consultants', 'donors', 'users',
+          'accounts', 'funds', 'investments', 'fixed_assets', 'endowment_history',
+          'security_prices', 'quotes', 'mortality_table', 'system_config',
+          'ai_interactions', 'audit_log']) {
+          db.exec(`DELETE FROM ${t}`);
+        }
+      });
+      wipe();
+    } finally {
+      db.pragma('foreign_keys = ON');
     }
   }
 
